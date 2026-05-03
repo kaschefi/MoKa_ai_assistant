@@ -5,6 +5,8 @@ from schemas.request_models import AgentState, RouteDecision
 from actions.n8n_tools import call_n8n_calendar
 from langchain_core.messages import HumanMessage, AIMessage
 
+GRAY = "\033[90m"
+
 router_llm = ChatOllama(model="qwen2.5:1.5b", temperature=0, base_url="http://localhost:11434")
 structured_router = router_llm.with_structured_output(RouteDecision)
 
@@ -33,7 +35,7 @@ def route_query(state: AgentState):
     """The Supervisor: decides where to send the message."""
     last_message = state["messages"][-1].content
     decision = router_chain.invoke({"user_input": last_message})
-    print(f" LangGraph Decision: {decision.route}")
+    print(f"\n {GRAY} LangGraph Decision: {decision.route}")
     return {"next_route": decision.route}
 
 
@@ -46,7 +48,7 @@ def calendar_node(state: AgentState):
 
 def chat_node(state: AgentState):
     """The Fallback: Standard local conversation."""
-    print(" Routing to local chat...")
+    print(f"{GRAY}Routing to local chat...")
     response = chat_llm.invoke(state["messages"])
     return {"messages": [response]}
 

@@ -48,6 +48,19 @@ def ensure_n8n_started():
     else:
         print(f"{GRAY} n8n server is already online!{RESET}\n")
 
+def kill_n8n():
+    """Forcefully terminates the background n8n (Node) process."""
+    print(f"{GRAY} Sweeping background processes...{RESET}")
+    try:
+        # /F forces termination, /T kills child processes, /IM targets the image name
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/IM", "node.exe"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        print(f"{GRAY} n8n server shut down.{RESET}")
+    except Exception as e:
+        print(f"{GRAY}Could not automatically close n8n: {e}{RESET}")
 
 def animate_loading(done_event):
     """Creates an animated loading text on a single line."""
@@ -65,24 +78,26 @@ def animate_loading(done_event):
     sys.stdout.flush()
 
 def terminal_chat():
-    print("=======================================")
+    print("\n=======================================")
     print("            COZMO BRAIN")
     print("=======================================\n")
 
     # Check and start n8n before we allow user input
     ensure_n8n_started()
 
-    print(f"{GRAY}Type 'quit' to exit.{RESET}\n")
+    print(f"start the conversation down below.{RESET}")
+    print(f"Type 'quit' to exit.{RESET}\n")
 
     while True:
         # The prompt is invisible, but makes the user's typed text GREEN
-        command = input(f":{GREEN}")
+        command = input(f"{GREEN}: ")
 
         # Immediately reset color so system text doesn't turn green
         print(f"{RESET}", end="")
 
         if command.lower() in ['quit', 'exit']:
             print(f"{GRAY}Shutting down brain...{RESET}")
+            kill_n8n()
             break
 
         print(f"{GRAY}Processing...{RESET}")
