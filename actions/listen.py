@@ -1,6 +1,10 @@
 import speech_recognition as sr
 import requests
 import re
+from core.semantic_layer import check_layer_1, execute_reflex
+#from core.router import run_cozmo_agent
+from actions.speak import speak_text
+import asyncio
 
 WAKE_WORD = "hey buddy"
 N8N_WEBHOOK_URL = "http://localhost:5678/webhook/cozmo-voice"
@@ -35,7 +39,14 @@ def start_listening():
                 if WAKE_WORD in text:
                     command = text.replace(WAKE_WORD, "").strip()
 
-                    #  CHECK FOR TIMER
+                    print("Checking Layer 1 (Semantic Reflexes)...")
+                    route_name = check_layer_1(command)
+
+                    if route_name:
+                        # if we find it in the layer 1 reflexes, we execute it
+                        asyncio.run(execute_reflex(route_name))
+                        continue
+
                     if "timer" in command:
                         seconds = extract_seconds(command)
                         if seconds:
