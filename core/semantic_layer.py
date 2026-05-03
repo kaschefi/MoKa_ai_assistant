@@ -1,12 +1,13 @@
 from semantic_router import Route
 from semantic_router.encoders import FastEmbedEncoder
-from semantic_router.layer import RouteLayer
+from semantic_router.routers import SemanticRouter
 from actions.charger import dock_with_charger
 from actions.speak import speak_text
 import asyncio
 
 dock_route = Route(
     name="dock_with_charger",
+    score_threshold=0.9,
     utterances=[
         "go to sleep",
         "go to your charger",
@@ -19,6 +20,7 @@ dock_route = Route(
 
 stop_route = Route(
     name="stop_motors",
+    score_threshold=0.9,
     utterances=[
         "stop",
         "freeze",
@@ -33,6 +35,7 @@ stop_route = Route(
 
 time_route = Route(
     name="tell_time",
+    score_threshold=0.9,
     utterances=[
         "what time is it",
         "tell me the time",
@@ -40,13 +43,23 @@ time_route = Route(
         "what's the time right now",
     ],
 )
-
-routes = [dock_route, stop_route, time_route]
+date_route = Route(
+    name="get_date",
+    score_threshold=0.9,
+    utterances=[
+        "what is the date",
+        "what is today",
+        "tell me the date",
+        "what day is it today",
+        "current date"
+    ]
+)
+routes = [dock_route, stop_route, time_route, date_route]
 
 print("Loading FastEmbed Encoder...")
 encoder = FastEmbedEncoder(name="BAAI/bge-small-en-v1.5")
 
-layer_1_router = RouteLayer(encoder=encoder, routes=routes)
+layer_1_router = SemanticRouter(encoder=encoder, routes=routes, auto_sync="local")
 
 
 REFLEX_REGISTRY = {
