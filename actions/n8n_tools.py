@@ -13,7 +13,7 @@ def call_n8n_calendar(user_input: str) -> str:
     url = "http://localhost:5678/webhook/calendarTool"
 
     try:
-        response = requests.post(url, json={"user_input": user_input}, timeout=30)
+        response = requests.post(url, json={"user_input": user_input}, timeout=180)
         response.raise_for_status()
 
         # We expect n8n's Webhook Response node to return a JSON object with a "response" key
@@ -27,3 +27,4 @@ def call_n8n_calendar(user_input: str) -> str:
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to n8n: {e}")
         return "I'm having trouble connecting to my calendar right now. Make sure n8n is running!"
+
