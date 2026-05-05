@@ -2,7 +2,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, START, END
 from schemas.request_models import AgentState, RouteDecision
-from actions.digital.n8n_tools import call_n8n_calendar
+from actions.digital.n8n_tools import call_n8n_calendar, call_web_search
 from langchain_core.messages import HumanMessage, AIMessage
 
 GRAY = "\033[90m"
@@ -43,6 +43,12 @@ def calendar_node(state: AgentState):
     """The Worker: Executes the n8n webhook."""
     last_message = state["messages"][-1].content
     n8n_reply = call_n8n_calendar(last_message)
+    return {"messages": [AIMessage(content=n8n_reply)]}
+
+def web_search_node(state: AgentState):
+    """The Worker: Executes the n8n webhook."""
+    last_message = state["messages"][-1].content
+    n8n_reply = call_web_search(last_message)
     return {"messages": [AIMessage(content=n8n_reply)]}
 
 
