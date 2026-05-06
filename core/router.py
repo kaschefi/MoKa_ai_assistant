@@ -2,9 +2,9 @@ from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, START, END
 from schemas.request_models import AgentState, RouteDecision
-from actions.digital.n8n_tools import call_n8n_calendar, call_web_search
+from actions.digital.n8n_agents import call_n8n_calendar, call_web_search
+from actions.digital.langchain_agents import weather_worker
 from langchain_core.messages import HumanMessage, AIMessage
-
 GRAY = "\033[90m"
 
 router_llm = ChatOllama(model="qwen2.5:1.5b", temperature=0, base_url="http://localhost:11434")
@@ -19,6 +19,7 @@ Your ONLY job is to classify the user's request into exactly ONE route.
 
 You MUST output a structured decision with one of these routes:
 - "calendar"
+- "weather"
 - "web_search"
 - "none"
 
@@ -35,17 +36,30 @@ Examples:
 - "Schedule a meeting at 3pm"
 - "Move my appointment to Friday"
 
-2. "web_search"
+2. "weather"
 Use this if the user:
-- Asks for current or real-world information
-- Mentions news, weather, sports, prices, or recent events
-- Asks factual questions that may change over time
+- Asks specifically about weather conditions or forecasts
+- Mentions temperature, rain, snow, wind, or climate
 Examples:
 - "What's the weather today?"
+- "Will it rain tomorrow?"
+- "How hot is it in Paris?"
+- "Weather in Graz this weekend"
+
+IMPORTANT:
+- ALWAYS prefer "weather" over "web_search" for weather-related queries.
+
+3. "web_search"
+Use this if the user:
+- Asks for current or real-world information (EXCEPT weather)
+- Mentions news, sports, prices, or recent events
+- Asks factual questions that may change over time
+Examples:
 - "Latest news about AI"
 - "Who won the game last night?"
+- "Bitcoin price today"
 
-3. "none"
+4. "none"
 Use this for:
 - Casual conversation
 - Opinions or general knowledge
@@ -62,8 +76,9 @@ STRICT RULES:
 - NEVER answer the question.
 - NEVER explain your reasoning.
 - NEVER hallucinate calendar data.
-- If there is ANY doubt about real-time info → use "web_search".
 - If there is ANY mention of scheduling → use "calendar".
+- If the query is about weather → ALWAYS use "weather".
+- If there is ANY doubt about real-time info → use "web_search".
 - Default to "none" only if clearly general conversation.
 
 ---------------------
@@ -101,6 +116,14 @@ def web_search_node(state: AgentState):
     return {"messages": [AIMessage(content=n8n_reply)]}
 
 
+def weather_node(state: AgentState):
+    """The Worker: Executes the Weather Agent."""
+    print(f"{GRAY}Searching for weather...")
+    result = weather_worker.invoke({"messages": state["messages"]})
+    # getting the final message from the agent's response
+    final_message = result["messages"][-1]
+    return {"messages": [final_message]}
+
 
 def chat_node(state: AgentState):
     """The Fallback: Standard local conversation."""
@@ -115,6 +138,8 @@ def decide_next_step(state: AgentState) -> str:
         return "calendar_node"
     elif route == "web_search":
         return "web_search_node"
+    elif route == "weather":
+        return "weather_node"
     return "chat_node"
 
 
@@ -124,12 +149,14 @@ builder = StateGraph(AgentState)
 builder.add_node("route_query", route_query)
 builder.add_node("calendar_node", calendar_node)
 builder.add_node("web_search_node", web_search_node)
+builder.add_node("weather_node", weather_node)
 builder.add_node("chat_node", chat_node)
 
 builder.add_edge(START, "route_query")
 builder.add_conditional_edges("route_query", decide_next_step)
 builder.add_edge("calendar_node", END)
 builder.add_edge("web_search_node", END)
+builder.add_edge("weather_node", END)
 builder.add_edge("chat_node", END)
 
 cozmo_graph = builder.compile()

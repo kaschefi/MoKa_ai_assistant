@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from core import cozmo_manager
-from actions import dock_with_charger, speak_text
+from core.connection import cozmo_manager
+from actions.physical.charger import dock_with_charger
+from actions.physical.speak import speak_text
 import uvicorn
 from schemas import *
 from actions.physical.face import FaceLibrary

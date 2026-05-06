@@ -8,8 +8,7 @@ class AgentState(TypedDict):
 
 # The Structured Output for the LLM
 class RouteDecision(BaseModel):
-    route: str = Field(description="The tool to use: 'weather', 'search', 'charger', 'calendar', or 'none'")
-
+    route: str = Field(description="The tool to use: 'weather', 'calendar', 'web_search', or 'none'")
 
 class MoveRequest(BaseModel):
     distance: float = Field(
