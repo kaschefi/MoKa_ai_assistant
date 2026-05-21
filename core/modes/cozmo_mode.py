@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from core.connection import cozmo_manager
+from core.hardware.connection import cozmo_manager
 from actions.physical.charger import dock_with_charger
 from actions.physical.speak import speak_text
 import uvicorn

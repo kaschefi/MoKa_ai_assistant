@@ -23,7 +23,7 @@ def extract_seconds(text):
 
 def start_listening():
     # Local imports to avoid circular dependency
-    from core.semantic_layer import check_layer_1, execute_reflex
+    from core.routing.semantic_layer import check_layer_1, execute_reflex
 
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:

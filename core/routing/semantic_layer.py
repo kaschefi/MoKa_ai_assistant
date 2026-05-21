@@ -3,7 +3,7 @@ import pkgutil
 import logging
 from semantic_router.encoders import FastEmbedEncoder
 from semantic_router.routers import SemanticRouter
-from core.registry import reflex_registry
+from core.routing.registry import reflex_registry
 import actions.physical
 import actions.digital
 

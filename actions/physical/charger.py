@@ -2,8 +2,8 @@ import pycozmo
 import time
 import cv2
 import numpy as np
-from core.connection import cozmo_manager
-from core.registry import reflex_registry
+from core.hardware.connection import cozmo_manager
+from core.routing.registry import reflex_registry
 
 latest_image = None
 

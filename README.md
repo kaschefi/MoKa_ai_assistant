@@ -81,13 +81,22 @@ cozmo_ai_assistant/
 │
 ├── core/
 │   ├── __init__.py
-│   ├── connection.py           # Singleton Cozmo hardware connection manager
-│   ├── cozmo_mode.py           # FastAPI application server and REST endpoint routing
-│   ├── registry.py             # Decorator class for low-latency Layer 1 reflex registration
-│   ├── router.py               # LangGraph state machine flow, supervisor, and node workers
-│   ├── semantic_layer.py       # Layer 1 semantic matching router & package-wide action loader
-│   ├── terminal_mode.py        # Terminal REPL chat client with n8n/Ollama auto-initialization
-│   └── tool_vector_db.py       # FAISS vector store bridge for dynamic tool registration & retrieval
+│   │
+│   ├── hardware/               # Physical hardware connections and robot managers
+│   │   ├── __init__.py
+│   │   └── connection.py       # Singleton Cozmo hardware connection manager
+│   │
+│   ├── routing/                # AI Intelligence, Layer 1 & 2 routers, reflex registries, and tool RAG
+│   │   ├── __init__.py
+│   │   ├── registry.py         # Decorator class for low-latency Layer 1 reflex registration
+│   │   ├── router.py           # LangGraph state machine flow, supervisor, and node workers
+│   │   ├── semantic_layer.py   # Layer 1 semantic matching router & package-wide action loader
+│   │   └── tool_vector_db.py   # FAISS vector store bridge for dynamic tool registration & retrieval
+│   │
+│   └── modes/                  # Interface modes and runtime application shells
+│       ├── __init__.py
+│       ├── cozmo_mode.py       # FastAPI application server and REST endpoint routing
+│       └── terminal_mode.py    # Terminal REPL chat client with n8n/Ollama auto-initialization
 │
 ├── actions/
 │   ├── physical/               # Robot hardware controls

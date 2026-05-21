@@ -1,7 +1,7 @@
 import requests
 from schemas.request_models import AgentState
 import requests
-from core.tool_vector_db import tool_rag_registry
+from core.routing.tool_vector_db import tool_rag_registry
 
 tool_rag_registry.register_tool_schema(
     name="calendar_node",

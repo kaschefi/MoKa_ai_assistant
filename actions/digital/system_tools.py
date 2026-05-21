@@ -1,5 +1,5 @@
 from datetime import datetime
-from core.registry import reflex_registry
+from core.routing.registry import reflex_registry
 from actions.physical.speak import speak_text
 
 @reflex_registry.reflex(

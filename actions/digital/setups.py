@@ -2,7 +2,7 @@ import os
 import webbrowser
 import asyncio
 import glob
-from core.registry import reflex_registry
+from core.routing.registry import reflex_registry
 
 @reflex_registry.reflex("setup_gaming", ["set my laptop for gaming",
         "gaming mode",

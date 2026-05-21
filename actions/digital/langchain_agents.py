@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langchain_ollama import ChatOllama
-from core.tool_vector_db import tool_rag_registry
+from core.routing.tool_vector_db import tool_rag_registry
 
 
 qwen25 = ChatOllama(model="qwen2.5:1.5b", temperature=0, base_url="http://localhost:11434")

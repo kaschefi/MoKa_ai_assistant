@@ -6,7 +6,7 @@ import requests
 import uuid
 import edge_tts
 from pydub import AudioSegment
-from core.connection import cozmo_manager
+from core.hardware.connection import cozmo_manager
 from deep_translator import GoogleTranslator
 
 def translate_to_persian_with_ai(english_text: str) -> str:

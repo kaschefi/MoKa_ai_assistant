@@ -1,6 +1,6 @@
 import sys
 import uvicorn
-from core.terminal_mode import terminal_chat
+from core.modes.terminal_mode import terminal_chat
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
 
         elif choice == '2':
             print("\n[Launching Cozmo Mode on localhost:8000...]\n")
-            import cozmo_mode
+            from core.modes import cozmo_mode
             try:
                 uvicorn.run(cozmo_mode.app, host="localhost", port=8000)
             except KeyboardInterrupt:

@@ -6,7 +6,7 @@ from schemas.request_models import AgentState, RouteDecision
 from actions.digital.n8n_agents import call_n8n_calendar, call_web_search
 from actions.digital.langchain_agents import weather_worker
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from core.tool_vector_db import tool_rag_registry
+from core.routing.tool_vector_db import tool_rag_registry
 
 GRAY = "\033[90m"
 RESET = "\033[0m"
