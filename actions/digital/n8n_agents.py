@@ -1,8 +1,12 @@
 import requests
 from schemas.request_models import AgentState
 import requests
+from core.tool_vector_db import tool_rag_registry
 
-
+tool_rag_registry.register_tool_schema(
+    name="calendar_node",
+    description="Manages Google Calendar. Use this if the user wants to check, create, move, change, or delete meetings, events, appointments, or schedules."
+)
 def call_n8n_calendar(user_input: str) -> str:
     """
     Sends the user's complex prompt to the n8n webhook.
@@ -28,6 +32,10 @@ def call_n8n_calendar(user_input: str) -> str:
         print(f"Error connecting to n8n: {e}")
         return "I'm having trouble connecting to my calendar right now. Make sure n8n is running!"
 
+tool_rag_registry.register_tool_schema(
+    name="web_search_node",
+    description="Searches the live web for general real-time information, breaking news, sports updates, stock prices, or current events that alter over time."
+)
 def call_web_search(user_input: str) -> str:
     """
     Sends the user's complex prompt to the n8n webhook.
@@ -53,3 +61,4 @@ def call_web_search(user_input: str) -> str:
         print(f"Error connecting to n8n: {e}")
         return "I'm having trouble connecting to my web search right now. Make sure n8n is running!"
 
+tool_rag_registry.build_index()

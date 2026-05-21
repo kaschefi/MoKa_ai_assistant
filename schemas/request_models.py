@@ -2,13 +2,15 @@ from typing import TypedDict, Annotated, List
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
+
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     next_route: str
+    active_tools: List[dict]
 
 # The Structured Output for the LLM
 class RouteDecision(BaseModel):
-    route: str = Field(description="The tool to use: 'weather', 'calendar', 'web_search', or 'none'")
+    route: str = Field(description="The exact name of the tool node to execute, or 'none' if it's general chat.")
 
 class MoveRequest(BaseModel):
     distance: float = Field(

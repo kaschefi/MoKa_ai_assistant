@@ -3,14 +3,16 @@ from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langchain_ollama import ChatOllama
+from core.tool_vector_db import tool_rag_registry
 
 
 qwen25 = ChatOllama(model="qwen2.5:1.5b", temperature=0, base_url="http://localhost:11434")
 
 
-# 1. Prompt callable — MUST return a list of BaseMessage objects, not a plain string.
-#    Returning a bare str breaks the ReAct message structure and causes the LLM to echo
-#    the raw tool-call JSON instead of actually executing the tool.
+tool_rag_registry.register_tool_schema(
+    name="weather_node",
+    description="Provides real-time weather updates, climate forecasts, temperature, precipitation, rain, snow, or wind details."
+)
 def get_weather_prompt(state) -> list:
     current_time = datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
 
@@ -59,3 +61,5 @@ weather_worker = create_react_agent(
     tools=[get_weather],
     prompt=get_weather_prompt
 )
+
+tool_rag_registry.build_index()
