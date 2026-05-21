@@ -1,6 +1,6 @@
 # Cozmo AI Assistant
 
-An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a two-layer intelligence pipeline — fast semantic reflexes for instant robot commands, and a LangGraph-powered AI brain for complex tasks like natural conversation, Google Calendar management, and specialized agents (Weather, Web Search) — all accessible via an interactive launcher or a **FastAPI** REST bridge.
+An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a state-of-the-art two-layer intelligence pipeline: **Layer 1** fast semantic reflexes (50ms latency) for instant physical and laptop commands, and **Layer 2** a dynamic **LangGraph-powered AI brain** that uses local LLMs (`qwen2.5:1.5b` via Ollama) and a **Vector RAG Tool Retrieval Index** for complex natural conversation, Google Calendar management, and advanced search agents (Weather, Tavily MCP, Web Search). All features are exposed via an interactive console launcher, voice control, or a **FastAPI** REST bridge.
 
 ---
 
@@ -8,83 +8,111 @@ An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a
 
 | Feature | Description |
 |---|---|
-| **Interactive Launcher** | Single `main.py` entry point with a menu to choose Terminal Mode or Robot Mode |
-| **Voice Input** | Wake-word listener (`"hey buddy"`) captures microphone audio, transcribes via Google Speech Recognition, and routes through the full AI pipeline |
-| **Text-to-Speech** | Cozmo speaks responses aloud using Microsoft Edge TTS, with support for **English & Persian (Farsi)** |
-| **AI Brain (LangGraph)** | Routes user input through a local LLM (`qwen2.5:1.5b` via Ollama) to specialized nodes: Weather, Calendar, Web Search, or local Chat |
-| **Specialized Weather Agent** | A ReAct agent that uses the `wttr.in` tool to provide real-time, conversational weather updates |
-| **Web Search** | Delegates general real-time queries (news, sports) to an **n8n** workflow via a dedicated webhook |
-| **Layer 1 Semantic Router** | Ultra-fast intent matching for physical robot commands (dock, stop, time, date) using `semantic-router` + FastEmbed |
-| **Google Calendar Integration** | Reads, creates, moves, and deletes calendar events via an **n8n** workflow connected to the Gemini API |
-| **Autonomous Docking** | Visual ArUco marker navigation — Cozmo finds its charger and docks itself |
-| **Face Expressions** | Renders custom text/graphics directly on Cozmo's 128×64 OLED face display |
-| **Timer** | Runs async countdown timers with live MM:SS face updates |
-| **FastAPI REST Bridge** | All robot capabilities are exposed as HTTP endpoints for easy external integration |
+| **Interactive Launcher** | Unified `main.py` console with a menu to run Terminal Mode (repl with brain) or Cozmo Mode (robot + API server) |
+| **Voice Input** | Wake-word listener (`"hey buddy"`) captures mic audio, transcribes via Google Speech Recognition, and routes to Layer 1 reflexes or LangGraph |
+| **Text-to-Speech** | Speeds responses using Microsoft Edge TTS, supporting both **English & Persian (Farsi)** with high-fidelity neural voices |
+| **Layer 1 Semantic Router** | Instant intent matching (~50ms) using `semantic-router` + `FastEmbed` for latency-critical commands (bypasses LLM) |
+| **Dynamic Layer 2 Tool RAG** | Rather than bloating LLM prompts with static definitions, tools are indexed in an in-memory vector database (**FAISS** + `BAAI/bge-small-en-v1.5` embeddings) and dynamically injected into the router's context based on relevance |
+| **Tavily MCP Integration** | Executes highly optimized, real-time web searches using the official Tavily **Model Context Protocol (MCP)** server spawned via standard `npx` stdio client pipes |
+| **Local Laptop Automation Setups** | Instant laptop routines for **Gaming Mode** (launches Steam, CS2, Discord), **Study Mode** (opens Moodle, Gemini, NotebookLM), and **Coding Mode** (opens PyCharm, GitHub, Gemini) |
+| **Specialized Weather Agent** | A ReAct agent that queries the `wttr.in` API to provide real-time, conversational weather updates |
+| **Google Calendar Integration** | Multi-step calendar manager that queries, creates, moves, or deletes appointments using an **n8n** webhook connected to Gemini API |
+| **Autonomous Docking** | Visual ArUco marker navigation — Cozmo activates his camera, scans for the charger (Marker ID 0), steers toward it, and backs onto the charging pins |
+| **Face Expressions** | Dynamic rendering of graphics, countdown timers, and weather info directly onto Cozmo's 128×64 OLED face display |
+| **Timer** | Runs asynchronous countdown timers with real-time MM:SS face updates |
+| **FastAPI REST Bridge** | Exposes all physical actions (docking, speak, timer, face expressions) as HTTP endpoints for external triggers |
 
 ---
 
 ## Architecture
 
 ```
-User Input (Terminal or Voice)
-    │
-    ▼
-┌─────────────────────────────────┐
-│         Layer 1 Router          │  ← Fast semantic matching (~50ms)
-│  (semantic-router + FastEmbed)  │    Handles: dock, stop, time, date
-└────────────────┬────────────────┘
-                 │ No match
-                 ▼
-┌──────────────────────────────────────────────────┐
-│              LangGraph AI Brain Node             │  ← Local LLM (Ollama / qwen2.5)
-│  ┌────────────┬──────────────┬────────────────┐  │
-│  │  Calendar  │   Weather    │      ...       │  │
-│  │   Node     │    Node      │   (etc.)       │  │
-│  │ (n8n Tool) │ (ReAct Agent)│                │  │
-│  └─────┬──────┴──────┬───────┴────────┬───────┘  │
-└────────┼─────────────┼────────────────┼──────────┘
-         │             │                │
-         ▼             ▼                ▼
-   n8n /calendarTool  wttr.in API      External APIs
-   → Google Cal       (Weather Tool)   (Search, etc.)
+                       User Input (Terminal / Voice)
+                                     │
+                                     ▼
+                ┌──────────────────────────────────────────┐
+                │         Layer 1 Semantic Router          │  ← Fast Embeddings (~50ms)
+                │      (reflex_registry + FastEmbed)       │    Bypasses LLM entirely.
+                └────────────────────┬─────────────────────┘
+                                     │ No reflex match
+                                     ▼
+                ┌──────────────────────────────────────────┐
+                │        Layer 2: LangGraph Brain          │
+                │                                          │
+                │  ┌────────────────────────────────────┐  │
+                │  │    Tool Retrieval Node (FAISS)     │  │  ← Dynamic Tool RAG Selection
+                │  └─────────────────┬──────────────────┘  │
+                │                    │ top 2 matched tools
+                │                    ▼
+                │  ┌────────────────────────────────────┐  │
+                │  │       Router Supervisor (LLM)      │  │  ← Structured classifier
+                │  └────────┬────────┬────────┬─────────┘  │
+                └───────────┼────────┼────────┼────────────┘
+                            │        │        │
+                            ▼        ▼        ▼
+                      Calendar    Weather  Web Search / Casual Chat
+                       (n8n)     (ReAct)   (Tavily MCP / Ollama)
 ```
 
-**Two-layer processing:**
-1. **Layer 1 (Semantic Router):** Embedding-based intent detection for latency-critical physical actions. Bypasses the LLM entirely.
-2. **Layer 2 (LangGraph):** A stateful agent graph that classifies queries into `calendar`, `weather`, `web_search`, or `none` (local chat), and routes to the appropriate worker node.
+### 1. Layer 1 Semantic Router (Fast Reflexes)
+Embedding-based semantic lookup. Utterances are mapped to a local registry of python operations (`core/registry.py`) enabling instantaneous response for:
+*   Physical actions: Autonomous charger docking.
+*   System operations: Date, time, and laptop configurations (Gaming/Coding/Study setups).
+
+### 2. Layer 2 LangGraph Brain (Dynamic Tool RAG)
+For complex inputs, the system triggers a stateful graph:
+1.  **Tool Retrieval Node**: Uses `FAISS` to run similarity search on the user's query against registered tool schemas, fetching only the top 2 candidates.
+2.  **Route Query**: Constructs a system prompt with only the retrieved candidate tools and uses local LLM (`qwen2.5:1.5b`) to yield a structured `RouteDecision`.
+3.  **Specialized Workers**: Routes to n8n (Google Calendar, Web Search), ReAct agent (Weather), or falls back to casual conversational chat (`chat_node`).
 
 ---
 
 ## Project Structure
 
+The project has a highly modular architecture separating physical controls, digital integrations, state schemas, and core routing logic:
+
 ```
 cozmo_ai_assistant/
 │
-├── main.py                   # Interactive launcher (Terminal / Robot mode menu)
+├── main.py                     # Entry point launcher (Terminal Mode / Cozmo Mode menu)
+├── Launch_Cozmo.bat            # Windows startup script to execute Terminal Mode
+├── roadmap.md                  # Project milestones and task backlog
+├── README.md                   # Full system documentation
 │
 ├── core/
-│   ├── connection.py         # Singleton Cozmo robot connection manager
-│   ├── cozmo_mode.py         # FastAPI app & REST endpoints (Robot Mode)
-│   ├── router.py             # LangGraph agent graph & node definitions
-│   ├── semantic_layer.py     # Layer 1 fast semantic router & reflex registry
-│   └── terminal_mode.py      # Interactive terminal REPL (no robot required)
+│   ├── __init__.py
+│   ├── connection.py           # Singleton Cozmo hardware connection manager
+│   ├── cozmo_mode.py           # FastAPI application server and REST endpoint routing
+│   ├── registry.py             # Decorator class for low-latency Layer 1 reflex registration
+│   ├── router.py               # LangGraph state machine flow, supervisor, and node workers
+│   ├── semantic_layer.py       # Layer 1 semantic matching router & package-wide action loader
+│   ├── terminal_mode.py        # Terminal REPL chat client with n8n/Ollama auto-initialization
+│   └── tool_vector_db.py       # FAISS vector store bridge for dynamic tool registration & retrieval
 │
 ├── actions/
-│   ├── physical/             # Physical robot interactions
-│   │   ├── charger.py        # Autonomous docking via ArUco marker vision
-│   │   ├── face.py           # Cozmo OLED face expression rendering
-│   │   ├── listen.py         # Wake-word mic listener → Layer 1 → n8n pipeline
-│   │   ├── speak.py          # Edge TTS → audio conversion → Cozmo playback
-│   │   └── timer.py          # Async countdown timer with face display
-│   └── digital/              # Cloud/API/Agent integrations
-│       ├── langchain_agents.py # ReAct agents (Weather Agent + tools)
-│       └── n8n_agents.py       # n8n webhook clients (Calendar & Web Search)
+│   ├── physical/               # Robot hardware controls
+│   │   ├── __init__.py
+│   │   ├── charger.py          # Vision-guided docking using OpenCV ArUco detector (Marker ID 0)
+│   │   ├── face.py             # OLED canvas draw actions (Timer MM:SS, weather details, thinking indicator)
+│   │   ├── listen.py           # Speech recognition wake-word parser ("hey buddy") and FastAPI/n8n forwarder
+│   │   ├── speak.py            # edge-tts engine + Persian Gemma translator + 22kHz wav converter
+│   │   └── timer.py            # Asynchronous countdown clock controller
+│   │
+│   └── digital/                # Digital APIs & Agent integrations
+│       ├── __init__.py
+│       ├── langchain_agents.py # Weather ReAct agent utilizing wttr.in tool & prompt engineering
+│       ├── MCPs.py             # Tavily search powered by standard Model Context Protocol client via npx
+│       ├── n8n_agents.py       # n8n webhook connectors for Google Calendar and web searching
+│       ├── setups.py           # OS-level workstation launchers (Gaming, Study, Coding routines)
+│       └── system_tools.py     # System action registry (Date and Time responses)
 │
 ├── schemas/
-│   └── request_models.py     # Pydantic models & LangGraph AgentState
+│   ├── __init__.py
+│   └── request_models.py       # Pydantic models for REST API requests and LangGraph TypedDict state
 │
 └── utils/
-    └── logger.py             # Shared logging utilities
+    ├── __init__.py
+    └── logger.py               # Centralized logging configurations
 ```
 
 ---
@@ -92,22 +120,24 @@ cozmo_ai_assistant/
 ## Prerequisites
 
 ### Hardware
-- **Anki Cozmo** robot + USB cable + Cozmo app (required only for Robot Mode)
+*   **Anki Cozmo** robot + USB charger base + Android/iOS device running Cozmo app in SDK mode (required for physical Cozmo Mode).
 
 ### Software
-- Python **3.10+**
-- [**Ollama**](https://ollama.com/) running locally with the `qwen2.5:1.5b` model
-- [**n8n**](https://n8n.io/) (auto-started by the terminal launcher, or run manually)
-- **FFmpeg** (required by `pydub` for audio conversion in Robot Mode)
+*   Python **3.10+** (Python 3.11 recommended).
+*   [**Ollama**](https://ollama.com/) running locally.
+*   [**n8n**](https://n8n.io/) installed globally (`npm install -g n8n`) or running in your environment (auto-started by launcher).
+*   **FFmpeg** (added to your system PATH; required by `pydub` for streaming speech audio to Cozmo).
 
-### Python Dependencies
+### Node Packages
+*   `tavily-mcp` (run automatically via `npx` during search).
 
-Install with `pip`:
+### Python Libraries
+Install the requirements using standard pip:
 ```bash
-pip install pycozmo fastapi uvicorn langchain-ollama langgraph semantic-router fastembed edge-tts pydub deep-translator opencv-python Pillow requests speechrecognition
+pip install pycozmo fastapi uvicorn langchain-ollama langchain-community langgraph semantic-router fastembed edge-tts pydub deep-translator opencv-python Pillow requests speechrecognition mcp python-dotenv faiss-cpu
 ```
 
-Or using `uv`:
+Or sync with the project's **uv** configurations:
 ```bash
 uv sync
 ```
@@ -116,58 +146,72 @@ uv sync
 
 ## Getting Started
 
-### 1. Pull the Ollama model
+### 1. Environment Configuration
 
+Create a `.env` file in the project root:
+```env
+TAVILY_API_KEY=your_tavily_api_key_here
+```
+
+### 2. Fetch the Local AI Models
+
+Pull the required Ollama models:
 ```bash
 ollama pull qwen2.5:1.5b
 ```
 
-### 2. Run the launcher
+### 3. Launch the Assistant
 
+Run the unified launcher:
 ```bash
 python main.py
 ```
 
-Choose **Option 1** for the terminal brain or **Option 2** to connect to the physical robot.
+*   **Option 1 (Terminal Mode)**: Launches the terminal chat interface. This will automatically scan ports, boot up n8n in the background, check Ollama's availability, compile the tool registry index, and open the command prompt.
+*   **Option 2 (Cozmo Mode)**: Connects to the physical robot and opens a FastAPI REST bridge on port `8000`.
 
-### 3. Start the voice listener (optional)
+### 4. Enable Voice Wake-Word Activation (Optional)
 
-Run alongside `main.py` to enable wake-word voice input:
-
+Start the listener in a separate terminal:
 ```bash
 python actions/physical/listen.py
 ```
-
-Say **"hey buddy"** followed by your command.
-
----
-
-## Configuration
-
-| Component | Default | Where to Change |
-|---|---|---|
-| Ollama model | `qwen2.5:1.5b` | `core/router.py` |
-| Ollama base URL | `http://localhost:11434` | `core/router.py` |
-| Calendar webhook URL | `http://localhost:5678/webhook/calendarTool` | `actions/digital/n8n_agents.py` |
-| Web search webhook URL | `http://localhost:5678/webhook/websearchTool` | `actions/digital/n8n_agents.py` |
-| Weather tool API | `wttr.in` | `actions/digital/langchain_agents.py` |
-| FastAPI host/port | `localhost:8000` | `main.py` |
-| Wake word | `"hey buddy"` | `actions/physical/listen.py` |
+Simply speak **"hey buddy"** followed by any command (e.g. *"hey buddy, set it for coding"* or *"hey buddy, what's today's date"*).
 
 ---
 
-## Roadmap
+## Technical Highlights
 
-- [x] Voice input
-- [x] Web search via n8n
-- [x] Specialized Weather Agent (ReAct)
-- [x] Single unified launcher (`main.py`)
-- [ ] Telegram bot integration
-- [ ] YOLO model for charger detection
-- [ ] Memory / conversation history in LangGraph
+### 1. Dynamic Tool RAG Retrieval
+Instead of feeding all available tool instructions into the LLM system prompt—which decreases latency and accuracy—this application utilizes a FAISS-backed Vector Database registry:
+```python
+# actions/digital/n8n_agents.py
+tool_rag_registry.register_tool_schema(
+    name="calendar_node",
+    description="Manages Google Calendar. Use this if the user wants to check, create, move, change, or delete meetings, events, appointments, or schedules."
+)
+```
+Upon a user query, the `tool_retrieval_node` matches the query vector with the tool embeddings and passes the select matched tools to the Router LLM.
+
+### 2. Standard Model Context Protocol (MCP) Client
+Using standard `mcp` stdio client parameters, the Tavily search tool operates dynamically:
+```python
+server_params = StdioServerParameters(
+    command="npx",
+    args=["-y", "tavily-mcp@latest"],
+    env=os.environ.copy(),
+    extra_spawn_args={"shell": True}
+)
+```
+This spawns the standard Tavily MCP package, executes a query, and handles communication perfectly, bypassing bulky client frameworks.
+
+### 3. Low-Latency Local Automation Reflexes
+Workstation presets are tied to local shell utilities:
+*   **Gaming**: Executes custom URI protocols (`steam://`) and queries paths to boot update launchers before executing Discord update commands.
+*   **Coding & Study**: Performs multi-tab browser dispatch routines (`webbrowser.open`) and searches registry folders dynamically using glob matching to execute JetBrains IDEs.
 
 ---
 
 ## License
 
-This project is for educational and research purposes.
+This project is for educational, research, and hobby purposes.

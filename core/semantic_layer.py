@@ -17,7 +17,7 @@ def load_actions():
     so that the decorators trigger and register themselves.
     """
     for package in [actions.physical, actions.digital]:
-        for _, module_name, _ in pkgutil.iter_packages(package.__path__, package.__name__ + "."):
+        for _, module_name, _ in pkgutil.iter_modules(package.__path__, package.__name__ + "."):
             importlib.import_module(module_name)
 
 def initialize_router():

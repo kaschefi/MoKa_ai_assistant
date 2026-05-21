@@ -13,7 +13,7 @@ def on_camera_image(cli, image):
     # Convert to BGR for OpenCV
     latest_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-@reflex_registry.register_reflex("dock_with_charger",[
+@reflex_registry.reflex("dock_with_charger",[
         "go to sleep",
         "go to your charger",
         "dock yourself",
