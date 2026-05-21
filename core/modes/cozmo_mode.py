@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from core.hardware.connection import cozmo_manager
 from actions.physical.charger import dock_with_charger
-from actions.physical.speak import speak_text
+from actions.physical.speak import respond
 import uvicorn
 from schemas import *
 from actions.physical.face import FaceLibrary
@@ -13,6 +13,7 @@ import asyncio
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Initializing Cozmo connection...")
+    cozmo_manager.robot_mode = True
     cozmo_manager.start()
     # Note: Using get_robot() based on connection.py definition
     app.state.face = FaceLibrary(cozmo_manager.get_robot())
@@ -30,7 +31,7 @@ async def handle_dock():
 
 @app.post("/actions/speak")
 async def handle_speak(req: SpeakRequest):
-    return await speak_text(req.text, req.play_animation, req.language)
+    return await respond(req.text, req.play_animation, req.language)
 
 
 @app.post("/actions/face")

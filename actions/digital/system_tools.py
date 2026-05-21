@@ -1,6 +1,6 @@
 from datetime import datetime
 from core.routing.registry import reflex_registry
-from actions.physical.speak import speak_text
+from actions.physical.speak import respond
 
 @reflex_registry.reflex(
     name="tell_time",
@@ -15,8 +15,7 @@ from actions.physical.speak import speak_text
 async def tell_time():
     current_time = datetime.now().strftime("%I:%M %p")
     msg = f"The time is exactly {current_time}."
-    print(msg)
-    await speak_text(msg, language="en")
+    await respond(msg, language="en")
 
 @reflex_registry.reflex(
     name="get_date",
@@ -31,5 +30,4 @@ async def tell_time():
 async def get_date():
     today = datetime.now().strftime("%A, %B %d, %Y")
     msg = f"Today is {today}."
-    print(msg)
-    await speak_text(msg, language="en")
+    await respond(msg, language="en")

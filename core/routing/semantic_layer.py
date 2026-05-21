@@ -45,7 +45,8 @@ async def execute_reflex(route_name: str) -> bool:
         print(f"Executing Reflex: {route_name}")
 
         if speech_text:
-            print(speech_text)
+            from actions.physical.speak import respond
+            await respond(speech_text)
 
         if action_func:
             await action_func()

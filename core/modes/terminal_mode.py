@@ -8,6 +8,7 @@ from datetime import datetime
 from core.routing.semantic_layer import check_layer_1, execute_reflex, initialize_router
 from core.routing.router import run_cozmo_agent
 import asyncio
+from actions.physical.speak import respond
 
 # --- ANSI Color Codes ---
 GREEN = "\033[92m"
@@ -82,7 +83,7 @@ def animate_loading(done_event):
     sys.stdout.write(f"\r{' ' * 40}\r")
     sys.stdout.flush()
 
-def terminal_chat():
+async def terminal_chat():
     print("\n=======================================")
     print("            WELCOME TO MY BRAIN!         ")
     print("=======================================\n")
@@ -121,9 +122,8 @@ def terminal_chat():
         if layer_1_route:
             print(f"{GRAY} [LAYER 1 TRIGGERED]: Route -> '{layer_1_route}'{RESET}")
 
-            # Since terminal_chat is sync, we use asyncio.run to execute the async reflex
             try:
-                if asyncio.run(execute_reflex(layer_1_route)):
+                if await execute_reflex(layer_1_route):
                     print(f"{GRAY}---------------------------------------{RESET}\n")
                     continue
             except Exception as e:
@@ -132,12 +132,11 @@ def terminal_chat():
             # Fallback for manual routes not in registry (or if registry execution failed/not implemented)
             if layer_1_route == "get_date":
                 today = datetime.now().strftime("%A, %B %d, %Y")
-                print(f"{BLUE}Today is {today}.{RESET}")
+                await respond(f"Today is {today}.")
             elif layer_1_route == "dock_with_charger":
-                print(f"{BLUE}Heading back to base!{RESET}")
-                print(f"{GRAY} [Hardware Mock]: Disabling AI, triggering wheel motors...{RESET}")
+                await respond("Heading back to base! Disabling AI, triggering wheel motors...")
             elif layer_1_route == "tell_joke":
-                print(f"{BLUE}Why do robots never get scared? Because they have nerves of steel!{RESET}")
+                await respond("Why do robots never get scared? Because they have nerves of steel!")
 
             print(f"{GRAY}---------------------------------------{RESET}\n")
             continue
@@ -151,21 +150,20 @@ def terminal_chat():
             final_answer = run_cozmo_agent(command)
             done_event.set()
             loading_thread.join()
-            print(f"{BLUE}{final_answer}{RESET}")
+            await respond(final_answer)
         except Exception as e:
             done_event.set()
             loading_thread.join()
             if "ConnectError" in str(type(e)) or "ConnectError" in str(e):
-                print(f"{BLUE}I'm having trouble connecting to my local brain (Ollama).{RESET}")
-                print(f"{GRAY}Please ensure Ollama is running on port 11434.{RESET}")
+                await respond("I'm having trouble connecting to my local brain (Ollama). Please ensure Ollama is running on port 11434.")
             else:
-                print(f"{BLUE}Oops! I encountered an error: {e}{RESET}")
+                await respond(f"Oops! I encountered an error: {e}")
 
         print(f"{GRAY}---------------------------------------{RESET}\n")
 
 
 if __name__ == "__main__":
-    terminal_chat()
+    asyncio.run(terminal_chat())
     import sys
     import os
 

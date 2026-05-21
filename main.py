@@ -22,7 +22,8 @@ def main():
 
         if choice == '1':
             print("\n[Launching Terminal Mode...]\n")
-            terminal_chat()
+            import asyncio
+            asyncio.run(terminal_chat())
 
         elif choice == '2':
             print("\n[Launching Cozmo Mode on localhost:8000...]\n")

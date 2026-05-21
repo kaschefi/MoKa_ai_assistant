@@ -110,3 +110,19 @@ async def speak_text(text: str, play_animation: bool = True, language: str = "en
     except Exception as e:
         print(f"Error during speech: {e}")
         return {"status": "error", "message": str(e)}
+
+
+async def respond(text: str, play_animation: bool = True, language: str = "en"):
+    """
+    Unified system response coordinator.
+    Always prints to the terminal with beautiful styling,
+    and speaks via PyCozmo if running in physical robot mode.
+    """
+    # Print beautifully to the terminal
+    print(f"\n🤖 \033[94mCozmo:\033[0m {text}\n")
+    
+    # Check if we are in physical robot mode and the client is active
+    if cozmo_manager.robot_mode and cozmo_manager.get_robot():
+        return await speak_text(text, play_animation, language)
+    
+    return {"status": "success", "message": "Printed response to terminal."}
