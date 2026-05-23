@@ -85,51 +85,105 @@ def summarize_conversation_node(state: AgentState):
 def memory_retrieval_node(state: AgentState):
     """
     Step 1: Runs a quick similarity check against the permanent database
-    using the user's latest input string.
+    using the user's latest input string and the owner ID.
+    Directly pulls all facts on broad meta-queries requesting profile summaries.
     """
     last_message = state["messages"][-1].content
-    memories = long_term_memory.retrieve_relevant_memories(last_message, limit=3)
+    user_id = "cozmo_owner"
+
+    # 1. Identify meta-queries requesting profile summary
+    q = last_message.lower()
+    meta_triggers = [
+        "what do you know about me", 
+        "what facts do you know", 
+        "tell me all the facts", 
+        "tell me facts about me", 
+        "what do you remember about me", 
+        "tell me about myself",
+        "my profile",
+        "facts you know"
+    ]
+    if any(trigger in q for trigger in meta_triggers):
+        # Pull all saved facts directly (up to recent 15) to bypass vector limitations on meta-queries
+        all_rows = long_term_memory._get_all_memories_for_user(user_id)
+        memories = [m[1] for m in all_rows[-15:]]
+        return {"retrieved_memories": memories}
+
+    memories = long_term_memory.retrieve_relevant_memories(last_message, user_id=user_id, limit=3)
     return {"retrieved_memories": memories}
 
 
 def memory_extraction_node(state: AgentState):
     """
-    Step 2: Scans the final exchange for permanent profile traits.
+    Step 2: Scans the recent conversation history for permanent profile traits.
     Strictly discards time, weather, and calendar dates.
+    Runs asynchronously in a background thread to avoid blocking user response.
+    Non-daemon thread guarantees Postgres writes complete safely even on immediate exit.
     """
     messages = state["messages"]
-    if len(messages) < 2:
+    if not messages:
         return {}
 
-    recent_exchange = f"User: {messages[-2].content}\nAssistant: {messages[-1].content}"
+    # Grab up to the last 4 messages to preserve critical question-answer context (2 full exchanges)
+    recent_messages = messages[-4:]
+    recent_exchange = ""
+    for m in recent_messages:
+        role = "User" if isinstance(m, HumanMessage) else "Assistant"
+        recent_exchange += f"{role}: {m.content}\n"
+        
+    user_id = "cozmo_owner"
 
-    selective_extraction_prompt = f"""You are a profile memory analyzer. Analyze the recent user message to see if they shared permanent personal information.
+    import threading
 
-    STRICT DATA FILTERS:
-    - IGNORE all temporary details: current weather conditions, the current time/day, and specific calendar appointment slots (e.g., "meeting at 4pm").
-    - EXTRACT only permanent biographical facts: identity/name, persistent preferences (e.g., favorite programming languages, software tools, game titles), project targets, or membership roles.
+    def run_extraction_bg():
+        try:
+            selective_extraction_prompt = f"""You are a profile memory analyzer. Analyze the recent conversation history to see if the user shared permanent personal information.
 
-    Exchanges:
-    {recent_exchange}
+            STRICT DATA FILTERS:
+            - IGNORE all temporary details: current weather conditions, the current time/day, and specific calendar appointment slots (e.g., "meeting at 4pm").
+            - EXTRACT only permanent biographical facts:
+              1. Identity/Name (e.g., user name, nicknames).
+              2. Student status, occupation, profession, field of study, or major (e.g., student, software engineer, studying computer science).
+              3. Persistent preferences, interests, or favorites (e.g., favorite sports teams, hobbies, coding languages, software tools, game titles).
+              4. Skills, goals, or roles.
 
-    INSTRUCTIONS:
-    1. Formulate facts as short declarative sentences starting with 'The user...' (e.g., 'The user codes primarily in Kotlin.', 'The user is a computer science student.').
-    2. If no permanent personal traits or preferences are revealed, return exactly 'NONE'.
-    3. Output ONLY the raw sentences separated by newlines, with no additional text or conversational formatting.
-    """
+            Recent Conversation History:
+            {recent_exchange}
 
-    response = chat_llm.invoke([
-        SystemMessage(content="You are a precise fact filtering pipeline. Output facts or 'NONE'."),
-        HumanMessage(content=selective_extraction_prompt)
-    ])
+            INSTRUCTIONS:
+            1. Formulate facts as short, clear, declarative sentences starting with 'The user...' (e.g., 'The user is a student.', 'The user is studying computer science.', 'The user's favorite sports team is Barcelona.').
+            2. If no new permanent personal facts, traits, or preferences are revealed, return exactly 'NONE'.
+            3. Output ONLY the raw sentences separated by newlines, with no additional text or conversational formatting.
+            4. STRICT GUARDRAIL: Only extract facts that the USER explicitly shares, states, or confirms. Never extract facts or preferences from details that the ASSISTANT suggests, hallucinates, or introduces in conversation (e.g., if the Assistant says 'You probably like movies' but the User doesn't explicitly confirm it, DO NOT extract it).
+            """
 
-    cleaned_result = response.content.strip()
-    if cleaned_result and cleaned_result != "NONE":
-        for fact in cleaned_result.split("\n"):
-            if fact.strip().startswith("The user"):
-                long_term_memory.save_memory(fact.strip())
-                print(f"{GRAY} [LONG-TERM MEMORY UPDATE]: Saved -> {fact.strip()}{RESET}")
+            response = router_llm.invoke([
+                SystemMessage(content="You are a precise fact filtering pipeline. Output facts or 'NONE'."),
+                HumanMessage(content=selective_extraction_prompt)
+            ])
 
+            cleaned_result = response.content.strip()
+            if cleaned_result and cleaned_result != "NONE":
+                for fact in cleaned_result.split("\n"):
+                    clean_fact = fact.strip()
+                    # Robust cleaning: strip list indicators like "1. ", "- ", "* "
+                    import re
+                    clean_fact = re.sub(r'^[-*\d.\s]+', '', clean_fact).strip()
+                    
+                    if clean_fact.lower().startswith("the user"):
+                        # Standardize prefix casing to "The user"
+                        clean_fact = re.sub(r'^[Tt]he\s+[Uu]ser', 'The user', clean_fact)
+                        
+                        long_term_memory.save_memory(clean_fact, user_id=user_id)
+                        print(f"\n{GRAY} [LONG-TERM MEMORY UPDATE]: Saved -> {clean_fact}{RESET}\n: ", end="")
+                        import sys
+                        sys.stdout.flush()
+        except Exception as e:
+            print(f"\n{GRAY} [LONG-TERM MEMORY ERROR]: Failed background extraction: {e}{RESET}\n: ", end="")
+            import sys
+            sys.stdout.flush()
+
+    threading.Thread(target=run_extraction_bg, daemon=False).start()
     return {}
 
 def route_query(state: AgentState):
@@ -234,12 +288,24 @@ def chat_node(state: AgentState):
     retrieved_memories = state.get("retrieved_memories", [])
     messages_payload = []
 
-    system_instructions = "You are Cozmo, an advanced personal robot assistant. Be conversational and helpful. "
+    system_instructions = (
+        "You are Cozmo, an advanced personal robot assistant with a persistent long-term memory core. "
+        "Be highly conversational, friendly, and helpful. "
+    )
     if existing_summary:
         system_instructions += f"Summary of the current chat session: {existing_summary} "
+        
     if retrieved_memories:
-        facts_str = " ".join(retrieved_memories)
-        system_instructions += f"Historical facts you permanently remember about this user: {facts_str}"
+        facts_str = "\n".join(f"- {fact}" for fact in retrieved_memories)
+        system_instructions += (
+            f"\n\n[LONG-TERM MEMORY CORE]\n"
+            f"You permanently remember the following historical facts about this user:\n"
+            f"{facts_str}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Treat these facts as absolute, undeniable truths from past interactions.\n"
+            f"2. Seamlessly integrate this knowledge into your responses (e.g. if the facts contain their name, greet them by their name).\n"
+            f"3. Never break character, and never explain technical AI limitations or state that you cannot remember things across sessions."
+        )
 
     messages_payload.append(SystemMessage(content=system_instructions))
     messages_payload.extend(state["messages"])
