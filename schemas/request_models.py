@@ -3,10 +3,13 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
 
+
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     next_route: str
     active_tools: List[dict]
+    retrieved_memories: List[str] # LONG-TERM CONTEXT INJECTION
+    summary: str
 
 # The Structured Output for the LLM
 class RouteDecision(BaseModel):

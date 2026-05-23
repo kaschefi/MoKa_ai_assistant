@@ -92,6 +92,9 @@ async def terminal_chat():
     ensure_n8n_started()
     ensure_ollama_started()
 
+    session_thread_id = f"terminal_{int(time.time())}"
+    print(f"{GRAY} Session initialized with Thread ID: {session_thread_id}{RESET}\n")
+
     print(f"start the conversation down below.{RESET}")
     print(f"Type 'quit' to exit.{RESET}\n")
     print(f"type 'back' to go back to the main page.{RESET}\n ")
@@ -147,7 +150,7 @@ async def terminal_chat():
         loading_thread.start()
 
         try:
-            final_answer = run_cozmo_agent(command)
+            final_answer = run_cozmo_agent(command, thread_id=session_thread_id)
             done_event.set()
             loading_thread.join()
             await respond(final_answer)

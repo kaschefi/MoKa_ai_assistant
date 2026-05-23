@@ -2,11 +2,17 @@
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, START, END
+import os
+from tensorflow._api.v2.compat.v1 import config
 from schemas.request_models import AgentState, RouteDecision
 from actions.digital.n8n_agents import call_n8n_calendar, call_web_search
 from actions.digital.langchain_agents import weather_worker
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from core.routing.tool_vector_db import tool_rag_registry
+from psycopg import connect
+from psycopg.rows import dict_row
+from langgraph.checkpoint.postgres import PostgresSaver
+from langchain_core.messages import RemoveMessage
 
 GRAY = "\033[90m"
 RESET = "\033[0m"
@@ -29,32 +35,61 @@ def tool_retrieval_node(state: AgentState):
     return {"active_tools": matched_tools}
 
 
+def summarize_conversation_node(state: AgentState):
+    """
+    If our conversation gets long, condense older messages into a rolling summary
+    and remove them from active short-term memory memory to keep context windows tiny.
+    """
+    messages = state["messages"]
+
+    # Only trigger summarization if we have accumulated more than 6 messages
+    if len(messages) <= 6:
+        return {}
+
+    existing_summary = state.get("summary", "")
+
+    summary_prompt = f"""Progressively summarize the lines of conversation provided, 
+    incorporating them into the current summary if one exists.
+
+    Current Summary: {existing_summary}
+    """
+    response = chat_llm.invoke([
+        SystemMessage(content=summary_prompt),
+        *messages[:-2]  # Summarize everything except the last 2 exchanges
+    ])
+
+    # Create instructions to delete old messages from the Postgres Checkpointer
+    delete_messages_instructions = [RemoveMessage(id=m.id) for m in messages[:-2]]
+
+    return {
+        "summary": response.content,
+        "messages": delete_messages_instructions
+    }
+
 def route_query(state: AgentState):
-    """
-    RAG LAYER STEP 2: Dynamically construct a prompt with ONLY the tools
-    selected by step 1 and let Ollama pick the target path.
-    """
     last_message = state["messages"][-1].content
     active_tools = state.get("active_tools", [])
 
-    # Format the retrieved tools into a string snippet for the system prompt
+    # Format the retrieved tools dynamically
     tool_menu_string = ""
     for tool in active_tools:
         tool_menu_string += f'- "{tool["name"]}": {tool["description"]}\n'
 
-    dynamic_prompt = f"""You are Cozmo's routing supervisor.
-Your ONLY job is to classify the user's request into exactly ONE of the current active routes.
+    dynamic_prompt = f"""You are Cozmo's routing supervisor. Your role is to accurately classify the intent of the user's latest message.
+        AVAILABLE UTILITY CHANNELS RETRIEVED FOR THIS TURN:
+        {tool_menu_string}- "none": Core conversational channel. Fall back to this for anything that doesn't strictly match a specific tool option above.
+        
+        CLASSIFICATION PHILOSOPHY & CRITERIA:
+        1. INTENT-DRIVEN SELECTION: You must ONLY select a specific tool node if the user is explicitly requesting an action, operation, or real-time data lookup that requires external service execution. 
+        2. CASUAL CHAT & PERSONAL FACTS ("none"): If the user is sharing personal information, making states of being, telling you facts about themselves, greeting you, or engaging in casual/philosophical discussion, you MUST select "none".
+        3. TOOL BOUNDARY RULE: Never assume or extrapolate. If a query vaguely mentions a topic but does not contain a clear directive to execute a tool's capability, keep the execution local by routing to "none".
+        
+        STRICT RULES:
+        - Output a structured decision containing the exact string name of the chosen route.
+        - If no tool matches the intent profile perfectly, output "none".
+        - Never attempt to answer or fulfill the user's request yourself. Your only job is classification.
+        """
 
-You MUST choose one of these options provided dynamically by the retrieval network:
-{tool_menu_string}- "none": Use this if the query does not match any tool option above and is just casual chat or general knowledge.
-
-STRICT RULES:
-1. Output a structured decision containing the exact string name of the chosen route.
-2. If it does not belong to any retrieved tool options, output "none".
-3. Never answer the query yourself.
-"""
-
-    # We bypass a static chain and compile it dynamically via an on-the-fly invocation
     decision = structured_router.invoke([
         SystemMessage(content=dynamic_prompt),
         HumanMessage(content=last_message)
@@ -62,7 +97,6 @@ STRICT RULES:
 
     print(f"\n{GRAY} LangGraph Dynamic Decision: {decision.route}{RESET}")
     return {"next_route": decision.route}
-
 
 # --- WORKER NODES  ---
 
@@ -87,9 +121,17 @@ def weather_node(state: AgentState):
 
 def chat_node(state: AgentState):
     print(f"{GRAY}Routing to local chat...{RESET}")
-    response = chat_llm.invoke(state["messages"])
-    return {"messages": [response]}
+    existing_summary = state.get("summary", "")
+    messages_payload = []
 
+    if existing_summary:
+        messages_payload.append(
+            SystemMessage(
+                content=f"You are Cozmo. Here is a summary of the conversation history so far for context: {existing_summary}")
+        )
+    messages_payload.extend(state["messages"])
+    response = chat_llm.invoke(messages_payload)
+    return {"messages": [response]}
 
 def decide_next_step(state: AgentState) -> str:
     """Evaluates router output and targets a node execution branch."""
@@ -106,6 +148,7 @@ builder = StateGraph(AgentState)
 # Add nodes
 builder.add_node("tool_retrieval_node", tool_retrieval_node)
 builder.add_node("route_query", route_query)
+builder.add_node("summarize_conversation_node", summarize_conversation_node)
 builder.add_node("calendar_node", calendar_node)
 builder.add_node("web_search_node", web_search_node)
 builder.add_node("weather_node", weather_node)
@@ -116,15 +159,41 @@ builder.add_edge(START, "tool_retrieval_node")
 builder.add_edge("tool_retrieval_node", "route_query")
 builder.add_conditional_edges("route_query", decide_next_step)
 
-builder.add_edge("calendar_node", END)
-builder.add_edge("web_search_node", END)
-builder.add_edge("weather_node", END)
-builder.add_edge("chat_node", END)
+builder.add_edge("calendar_node", "summarize_conversation_node")
+builder.add_edge("web_search_node", "summarize_conversation_node")
+builder.add_edge("weather_node", "summarize_conversation_node")
+builder.add_edge("chat_node", "summarize_conversation_node")
 
-cozmo_graph = builder.compile()
+builder.add_edge("summarize_conversation_node", END)
 
 
-def run_cozmo_agent(user_input: str) -> str:
+DB_URI = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/cozmo_db")
+
+# Crucial for LangGraph compatibility & table schema auto-migrations
+conn_kwargs = {
+    "autocommit": True,
+    "row_factory": dict_row
+}
+try:
+    conn = connect(DB_URI, **conn_kwargs)
+    checkpointer = PostgresSaver(conn)
+    checkpointer.setup()
+
+    cozmo_graph = builder.compile(checkpointer=checkpointer)
+    print(" Postgres checkpointer initialized successfully.")
+except Exception as db_err:
+    print(f" Checkpointer connection failed: {db_err}. Falling back to uncompiled builder.")
+    cozmo_graph = builder.compile()  # Fallback to stateless memory if DB is down
+
+
+def run_cozmo_agent(user_input: str,thread_id: str = "cozmo_default_session") -> str:
     initial_state = {"messages": [HumanMessage(content=user_input)]}
-    result = cozmo_graph.invoke(initial_state)
+    config = {"configurable": {"thread_id": thread_id}}
+
+    initial_state = {
+        "messages": [HumanMessage(content=user_input)],
+        "retrieved_memories": []  # Empty initial layer container
+    }
+
+    result = cozmo_graph.invoke(initial_state, config=config)
     return result["messages"][-1].content

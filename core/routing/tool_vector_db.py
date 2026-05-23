@@ -16,6 +16,10 @@ class LangChainFastEmbedBridge:
     def embed_query(self, text: str) -> list[float]:
         return self.encoder([text])[0]
 
+    def __call__(self, text: str) -> list[float]:
+        """Makes the instance callable, routing directly to embed_query."""
+        return self.embed_query(text)
+
 
 class ToolVectorRegistry:
     def __init__(self):
