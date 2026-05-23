@@ -192,7 +192,7 @@ def memory_extraction_node(state: AgentState):
                         clean_fact = re.sub(r'^[Tt]he\s+[Uu]ser', 'The user', clean_fact)
                         
                         long_term_memory.save_memory(clean_fact, category=category, user_id=user_id)
-                        print(f"\n{GRAY} [LONG-TERM MEMORY UPDATE]: Saved -> {clean_fact} ({category}){RESET}\n: ", end="")
+                        #print(f"\n{GRAY} [LONG-TERM MEMORY UPDATE]: Saved -> {clean_fact} ({category}){RESET}\n: ", end="")
                         import sys
                         sys.stdout.flush()
         except Exception as e:

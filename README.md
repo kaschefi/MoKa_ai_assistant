@@ -21,6 +21,8 @@ An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a
 | **Face Expressions** | Dynamic rendering of graphics, countdown timers, and weather info directly onto Cozmo's 128×64 OLED face display |
 | **Timer** | Runs asynchronous countdown timers with real-time MM:SS face updates |
 | **FastAPI REST Bridge** | Exposes all physical actions (docking, speak, timer, face expressions) as HTTP endpoints for external triggers |
+| **Short-Term Memory** | PostgreSQL-backed persistent session state tracker (`PostgresSaver`) paired with rolling context summarization and automatic history trimming to keep context windows tiny |
+| **Long-Term Memory** | Permanent biographical store using native PostgreSQL float arrays (`REAL[]`), local `FastEmbed` embeddings, NumPy cosine similarity, dynamic entity resolution categories ($O(1)$ updates), and async background extraction threads |
 
 ---
 
@@ -64,6 +66,34 @@ For complex inputs, the system triggers a stateful graph:
 1.  **Tool Retrieval Node**: Uses `FAISS` to run similarity search on the user's query against registered tool schemas, fetching only the top 2 candidates.
 2.  **Route Query**: Constructs a system prompt with only the retrieved candidate tools and uses local LLM (`qwen2.5:3b`) to yield a structured `RouteDecision`.
 3.  **Specialized Workers**: Routes to n8n (Google Calendar, Web Search), ReAct agent (Weather), or falls back to casual conversational chat (`chat_node`).
+
+### 3. Layer 2 Memory Architecture (Short & Long-Term)
+The assistant features a sophisticated, persistent two-tiered memory architecture designed to run efficiently on local systems without heavy cloud or complex database dependencies:
+
+#### A. Short-Term Memory (Stateful Session Checkpointing)
+*   **PostgreSQL Session Checkpointer**: Driven by LangGraph's `PostgresSaver`, conversational sessions are stored statefully using connection pooling and database thread trackers (`thread_id="cozmo_default_session"`).
+*   **Automatic Database Migrations**: Self-heals and sets up all required system schemas and state tables natively on application initialization (`checkpointer.setup()`), gracefully falling back to local memory if PostgreSQL is offline.
+*   **Rolling Summarization Node**: To prevent local LLM context window bloating and maintain fast inference speeds:
+    *   If a session accumulates **more than 6 messages**, the graph triggers `summarize_conversation_node`.
+    *   It condenses historical context into a concise running `summary` attribute inside the state.
+    *   It emits a sequence of `RemoveMessage` commands to prune active messages older than the last 4 exchanges (2 full turns), freeing up significant CPU resources while maintaining context.
+
+#### B. Long-Term Memory (Permanent Semantic Profile Core)
+*   **Native PostgreSQL Vector Storage (`REAL[]`)**: Bypasses OS-level compiled binaries or dependencies on `pgvector` (highly beneficial for Windows support) by utilizing native float array storage mapping (`REAL[]`) to persist high-dimensional fact embeddings.
+*   **Local Fast Embedding Generation**: Generates 384-dimensional dense vectors locally using `LangChainFastEmbedBridge` powered by the optimized `FastEmbed` library (`BAAI/bge-small-en-v1.5`), ensuring instant query/fact processing.
+*   **Entity Resolution & Dynamic Category Overwriting ($O(1)$ updates)**:
+    *   Supports key biological and user attribute categories: `user_name`, `user_occupation`, `favorite_sports_team`, `favorite_programming_language`, and `user_location`.
+    *   When Cozmo extracts a fact in these unique categories, it bypasses complex semantic logic and performs $O(1)$ entity resolution—directly replacing or updating the database row to prevent key duplicates (e.g. no redundant name facts).
+*   **NumPy Cosine Similarity & Deduplication**:
+    *   For general preferences or hobbies, Cozmo evaluates the semantic overlap mathematically via local NumPy array operations:
+        $$\text{Similarity} = \frac{A \cdot B}{\|A\| \|B\|}$$
+    *   A strict similarity threshold of **`0.82`** prevents duplicate biographical facts; if a new fact is semantically similar to an existing fact, the system updates the original rather than adding a new entry.
+*   **Asynchronous Fact Extraction & Noise Filtering**:
+    *   Memory extraction executes on a non-blocking background thread (`threading.Thread(daemon=False)`) at the end of each response, keeping physical text-to-speech (TTS) and voice response cycles entirely lag-free.
+    *   Runs a low-temperature (0.0) deterministic LLM extractor (`router_llm`) on the last 3 messages to parse out explicit user biographical facts while strictly filtering out temporary items (weather, calendar times, dates) and assistant suggestions.
+*   **Dual-Mode Retrieval Pipeline**:
+    *   **Vector Semantic Search**: Matches current query embeddings against stored facts to fetch up to 3 highly relevant personal details per turn, feeding them silently to Cozmo's system context.
+    *   **Meta-Query Fallback**: Intercepts broad questions like *"what do you know about me"* or *"tell me all the facts you know"* (which have 0% semantic overlap with vector embeddings of actual facts) and returns the last 15 raw database records directly.
 
 ---
 
