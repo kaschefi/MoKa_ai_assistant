@@ -38,7 +38,6 @@ class ToolVectorRegistry:
         """Compiles the tool definitions into an in-memory vector index."""
         if self._tools_source:
             self.db = FAISS.from_documents(self._tools_source, self.embeddings)
-            print(f" Layer 2 Tool RAG compiled with {len(self._tools_source)} schemas.")
 
     def search_relevant_tools(self, user_query: str, k: int = 3, distance_threshold: float = 0.86) -> list[dict]:
         """Retrieves the top K tools closest to the user's intent, filtered by distance score."""

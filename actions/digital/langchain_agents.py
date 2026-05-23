@@ -60,5 +60,3 @@ weather_worker = create_react_agent(
     tools=[get_weather],
     prompt=get_weather_prompt
 )
-
-tool_rag_registry.build_index()

@@ -60,5 +60,3 @@ def call_web_search(user_input: str) -> str:
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to n8n: {e}")
         return "I'm having trouble connecting to my web search right now. Make sure n8n is running!"
-
-tool_rag_registry.build_index()

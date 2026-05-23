@@ -1,9 +1,7 @@
 # core/router.py
 from langchain_ollama import ChatOllama
-from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, START, END
 import os
-from tensorflow._api.v2.compat.v1 import config
 from schemas.request_models import AgentState, RouteDecision
 from actions.digital.n8n_agents import call_n8n_calendar, call_web_search
 from actions.digital.langchain_agents import weather_worker
@@ -240,9 +238,7 @@ try:
     checkpointer.setup()
 
     cozmo_graph = builder.compile(checkpointer=checkpointer)
-    print(" Postgres checkpointer initialized successfully.")
 except Exception as db_err:
-    print(f" Checkpointer connection failed: {db_err}. Falling back to uncompiled builder.")
     cozmo_graph = builder.compile()  # Fallback to stateless memory if DB is down
 
 

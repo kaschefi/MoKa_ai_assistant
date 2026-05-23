@@ -27,18 +27,25 @@ def is_service_running(port):
 
 
 def ensure_n8n_started():
-    """Boots n8n silently in the background if it isn't running."""
-    if not is_service_running(5678):
-        print(f"{GRAY}n8n is not running. Booting it up in the background...{RESET}")
-        subprocess.Popen(["n8n", "start"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(15):
-            if is_service_running(5678):
-                print(f"{GRAY} n8n server is online!{RESET}\n")
-                return
-            time.sleep(1)
-        print(f"{GRAY}⚠ n8n is taking a while to boot. Proceeding anyway...{RESET}\n")
-    else:
-        print(f"{GRAY} n8n server is already online!{RESET}\n")
+    """Boots n8n in a background thread so the terminal starts immediately."""
+    def check_and_boot():
+        if not is_service_running(5678):
+            #sys.stdout.write(f"{GRAY}n8n is not running. Booting it up in the background...{RESET}\n")
+            sys.stdout.flush()
+            subprocess.Popen(["n8n", "start"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(30):
+                if is_service_running(5678):
+                    #sys.stdout.write(f"\n{GRAY}[Background] n8n server is online!{RESET}\n: ")
+                    sys.stdout.flush()
+                    return
+                time.sleep(1)
+            sys.stdout.write(f"\n{GRAY}[Background] ⚠ n8n is taking a while to boot. Proceeding anyway...{RESET}\n: ")
+            sys.stdout.flush()
+        else:
+            sys.stdout.write(f"{GRAY} n8n server is already online!{RESET}\n")
+            sys.stdout.flush()
+
+    threading.Thread(target=check_and_boot, daemon=True).start()
 
 
 def ensure_ollama_started():
@@ -84,13 +91,17 @@ def animate_loading(done_event):
     sys.stdout.flush()
 
 async def terminal_chat():
-    print("\n=======================================")
-    print("            WELCOME TO MY BRAIN!         ")
-    print("=======================================\n")
+    print(f"\n{GRAY}[Booting Cozmo AI Assistant...]{RESET}")
 
     # Check and start n8n/Ollama before we allow user input
     ensure_n8n_started()
     ensure_ollama_started()
+
+    await asyncio.sleep(0.1)
+
+    print("\n=======================================")
+    print("            WELCOME TO MY BRAIN!         ")
+    print("=======================================\n")
 
     session_thread_id = f"terminal_{int(time.time())}"
     print(f"{GRAY} Session initialized with Thread ID: {session_thread_id}{RESET}\n")

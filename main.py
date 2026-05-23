@@ -1,6 +1,5 @@
 import sys
 import uvicorn
-from core.modes.terminal_mode import terminal_chat
 
 
 def main():
@@ -23,6 +22,7 @@ def main():
         if choice == '1':
             print("\n[Launching Terminal Mode...]\n")
             import asyncio
+            from core.modes.terminal_mode import terminal_chat
             asyncio.run(terminal_chat())
 
         elif choice == '2':

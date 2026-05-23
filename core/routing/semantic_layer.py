@@ -1,13 +1,29 @@
 import importlib
 import pkgutil
 import logging
+import warnings
+import os
+
+# Suppress all python warnings and disable log levels below ERROR globally
+warnings.filterwarnings("ignore")
+logging.disable(logging.WARNING)
+
+# Silently disable all tqdm progress bars (e.g. from FastEmbed/Hugging Face downloads)
+try:
+    import tqdm
+    original_init = tqdm.tqdm.__init__
+    def new_init(self, *args, **kwargs):
+        kwargs['disable'] = True
+        original_init(self, *args, **kwargs)
+    tqdm.tqdm.__init__ = new_init
+except Exception:
+    pass
+
 from semantic_router.encoders import FastEmbedEncoder
 from semantic_router.routers import SemanticRouter
 from core.routing.registry import reflex_registry
 import actions.physical
 import actions.digital
-
-logging.getLogger("semantic_router").setLevel(logging.ERROR)
 
 layer_1_router = None
 
@@ -23,18 +39,17 @@ def load_actions():
 def initialize_router():
     global layer_1_router
 
-    print("Discovering local actions...")
     load_actions()
-
-    print("Loading FastEmbed Encoder...")
-    encoder = FastEmbedEncoder(name="BAAI/bge-large-en-v1.5")
-
-    print(f"Building Semantic Index with {len(reflex_registry.routes)} registered routes...")
+    encoder = FastEmbedEncoder(name="BAAI/bge-small-en-v1.5")
     layer_1_router = SemanticRouter(
         encoder=encoder,
         routes=reflex_registry.routes,
         auto_sync="local"
     )
+
+    # Build Layer 2 Tool RAG index exactly once after all actions are registered
+    from core.routing.tool_vector_db import tool_rag_registry
+    tool_rag_registry.build_index()
 
 initialize_router()
 
