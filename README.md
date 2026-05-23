@@ -1,6 +1,6 @@
 # Cozmo AI Assistant
 
-An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a state-of-the-art two-layer intelligence pipeline: **Layer 1** fast semantic reflexes (50ms latency) for instant physical and laptop commands, and **Layer 2** a dynamic **LangGraph-powered AI brain** that uses local LLMs (`qwen2.5:1.5b` via Ollama) and a **Vector RAG Tool Retrieval Index** for complex natural conversation, Google Calendar management, and advanced search agents (Weather, Tavily MCP, Web Search). All features are exposed via an interactive console launcher, voice control, or a **FastAPI** REST bridge.
+An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a state-of-the-art two-layer intelligence pipeline: **Layer 1** fast semantic reflexes (50ms latency) for instant physical and laptop commands, and **Layer 2** a dynamic **LangGraph-powered AI brain** that uses local LLMs (`qwen2.5:3b` via Ollama) and a **Vector RAG Tool Retrieval Index** for complex natural conversation, Google Calendar management, and advanced search agents (Weather, Tavily MCP, Web Search). All features are exposed via an interactive console launcher, voice control, or a **FastAPI** REST bridge.
 
 ---
 
@@ -62,7 +62,7 @@ Embedding-based semantic lookup. Utterances are mapped to a local registry of py
 ### 2. Layer 2 LangGraph Brain (Dynamic Tool RAG)
 For complex inputs, the system triggers a stateful graph:
 1.  **Tool Retrieval Node**: Uses `FAISS` to run similarity search on the user's query against registered tool schemas, fetching only the top 2 candidates.
-2.  **Route Query**: Constructs a system prompt with only the retrieved candidate tools and uses local LLM (`qwen2.5:1.5b`) to yield a structured `RouteDecision`.
+2.  **Route Query**: Constructs a system prompt with only the retrieved candidate tools and uses local LLM (`qwen2.5:3b`) to yield a structured `RouteDecision`.
 3.  **Specialized Workers**: Routes to n8n (Google Calendar, Web Search), ReAct agent (Weather), or falls back to casual conversational chat (`chat_node`).
 
 ---
@@ -166,7 +166,7 @@ TAVILY_API_KEY=your_tavily_api_key_here
 
 Pull the required Ollama models:
 ```bash
-ollama pull qwen2.5:1.5b
+ollama pull qwen2.5:3b
 ```
 
 ### 3. Launch the Assistant

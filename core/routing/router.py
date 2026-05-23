@@ -17,9 +17,9 @@ from langchain_core.messages import RemoveMessage
 GRAY = "\033[90m"
 RESET = "\033[0m"
 
-router_llm = ChatOllama(model="qwen2.5:1.5b", temperature=0, base_url="http://localhost:11434")
+router_llm = ChatOllama(model="qwen2.5:3b", temperature=0, base_url="http://localhost:11434")
 structured_router = router_llm.with_structured_output(RouteDecision)
-chat_llm = ChatOllama(model="qwen2.5:1.5b", temperature=0.6, base_url="http://localhost:11434")
+chat_llm = ChatOllama(model="qwen2.5:3b", temperature=0.6, base_url="http://localhost:11434")
 
 
 # --- GRAPH NODES ---
@@ -87,6 +87,10 @@ def route_query(state: AgentState):
     last_message = state["messages"][-1].content
     active_tools = state.get("active_tools", [])
 
+    # If no tools passed the RAG similarity gate, bypass LLM classification completely
+    if not active_tools:
+        return {"next_route": "none"}
+
     # Format the retrieved tools dynamically
     tool_menu_string = ""
     for tool in active_tools:
@@ -112,7 +116,6 @@ def route_query(state: AgentState):
         HumanMessage(content=last_message)
     ])
 
-    print(f"\n{GRAY} LangGraph Dynamic Decision: {decision.route}{RESET}")
     return {"next_route": decision.route}
 
 # --- WORKER NODES  ---
@@ -132,12 +135,52 @@ def web_search_node(state: AgentState):
 
 
 def weather_node(state: AgentState):
-    result = weather_worker.invoke({"messages": state["messages"]})
-    return {"messages": [result["messages"][-1]]}
+    """
+    Direct single-turn Weather Node:
+    1. Extract the city from the user query using a precise prompt (default to Vienna).
+    2. Call the get_weather Python function directly.
+    3. Feed the raw weather text to the LLM to format a friendly conversational response.
+    """
+    last_message = state["messages"][-1].content
+    
+    # Step 1: Extract city using a fast LLM call
+    city_prompt = f"""You are a precise city name extractor. Extract the city name mentioned in this query.
+    If no city is explicitly mentioned, output ONLY 'Vienna'.
+    Output ONLY the city name, with no other words, punctuation, or formatting.
+    
+    Query: "{last_message}"
+    """
+    city_response = chat_llm.invoke([
+        SystemMessage(content="You extract city names. Output ONLY the city name, nothing else."),
+        HumanMessage(content=city_prompt)
+    ])
+    city = city_response.content.strip().strip("'\"").strip()
+    if not city or len(city.split()) > 3: # Fallback if model outputs a sentence
+        city = "Vienna"
+        
+    # Step 2: Call the Python get_weather function directly
+    from actions.digital.langchain_agents import get_weather
+    raw_weather = get_weather.func(city)
+    
+    # Step 3: Generate the conversational response including the temperature degrees
+    weather_prompt = f"""You are Cozmo, a friendly robot assistant. 
+    Here is the raw weather data fetched for the city of '{city}':
+    "{raw_weather}"
+    
+    Based on this raw data, write a short, natural, conversational response that you can speak out loud.
+    You MUST explicitly include the exact temperature in degrees (in Celsius). Never output just the condition (like 'sunny') without the exact temperature degrees.
+    Keep it to a single friendly sentence.
+    """
+    
+    response = chat_llm.invoke([
+        SystemMessage(content="You are Cozmo. Write a friendly, single-sentence weather update including the exact temperature degrees."),
+        HumanMessage(content=weather_prompt)
+    ])
+    
+    return {"messages": [AIMessage(content=response.content.strip())]}
 
 
 def chat_node(state: AgentState):
-    print(f"{GRAY}Routing to local chat...{RESET}")
     existing_summary = state.get("summary", "")
     messages_payload = []
 

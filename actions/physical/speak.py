@@ -118,8 +118,8 @@ async def respond(text: str, play_animation: bool = True, language: str = "en"):
     Always prints to the terminal with beautiful styling,
     and speaks via PyCozmo if running in physical robot mode.
     """
-    # Print beautifully to the terminal
-    print(f"\n🤖 \033[94mCozmo:\033[0m {text}\n")
+    # Print response text directly in blue color with no prefix
+    print(f"\n\033[94m{text}\033[0m\n")
     
     # Check if we are in physical robot mode and the client is active
     if cozmo_manager.robot_mode and cozmo_manager.get_robot():

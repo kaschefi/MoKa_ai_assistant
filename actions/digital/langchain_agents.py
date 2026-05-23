@@ -6,7 +6,7 @@ from langchain_ollama import ChatOllama
 from core.routing.tool_vector_db import tool_rag_registry
 
 
-qwen25 = ChatOllama(model="qwen2.5:1.5b", temperature=0, base_url="http://localhost:11434")
+qwen25 = ChatOllama(model="qwen2.5:3b", temperature=0, base_url="http://localhost:11434")
 
 
 tool_rag_registry.register_tool_schema(
@@ -32,7 +32,7 @@ INSTRUCTIONS:
 1. Extract the location.
 2. ALWAYS use the `get_weather` tool to fetch the data. NEVER guess or hallucinate the weather.
 3. Read the raw data returned by the tool.
-4. Respond with a short, natural, conversational sentence that Cozmo can speak out loud.
+4. Respond with a short, natural, conversational sentence that Cozmo can speak out loud. You MUST always explicitly include the exact temperature (in degrees) in your sentence. Never summarize it as just 'sunny' or 'rainy' without mentioning the exact temperature.
 
 Example Output: "Right now in Vienna, it's 14 degrees and partly cloudy."
 """)]
@@ -43,7 +43,6 @@ Example Output: "Right now in Vienna, it's 14 degrees and partly cloudy."
 def get_weather(city: str) -> str:
     """Fetches the current weather for a specific city."""
     import requests
-    print(f"   [Tool Executing: Fetching weather for {city}...]")
     try:
         response = requests.get(f'https://wttr.in/{city}?format=3', timeout=5)
         response.raise_for_status()
