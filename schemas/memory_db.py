@@ -213,31 +213,48 @@ class LongTermMemoryManager:
                 return cur.fetchall()
 
     def retrieve_relevant_memories(self, user_query: str, user_id: str = "cozmo_owner", limit: int = 3) -> list[str]:
-        """Calculates relevance scoring inside Python using precomputed Postgres vectors and NumPy."""
+        """Calculates relevance scoring inside Python using precomputed Postgres vectors and NumPy.
+        Always retrieves core profile memories (UNIQUE_CATEGORIES) directly to guarantee consistency,
+        while using semantic similarity search for general preferences.
+        """
         all_rows = self._get_all_memories_for_user(user_id)
         if not all_rows:
             return []
 
-        # Embed user's query exactly once per turn
-        query_embedding = np.array(self.embedder.embed_query(user_query))
-        norm_query = np.linalg.norm(query_embedding)
-        if norm_query == 0:
-            return []
+        core_memories = []
+        general_memories_rows = []
+        for _, fact, db_embedding_list, category in all_rows:
+            if category in self.UNIQUE_CATEGORIES:
+                core_memories.append(fact)
+            else:
+                general_memories_rows.append((fact, db_embedding_list))
 
-        scored_memories = []
+        scored_general = []
+        if general_memories_rows:
+            query_embedding = np.array(self.embedder.embed_query(user_query))
+            norm_query = np.linalg.norm(query_embedding)
+            if norm_query > 0:
+                for fact, db_embedding_list in general_memories_rows:
+                    db_embedding = np.array(db_embedding_list)
+                    norm_db = np.linalg.norm(db_embedding)
+                    if norm_db == 0:
+                        continue
+                    similarity = np.dot(query_embedding, db_embedding) / (norm_query * norm_db)
+                    scored_general.append((fact, similarity))
+                
+                # Sort by highest similarity score
+                scored_general.sort(key=lambda x: x[1], reverse=True)
 
-        for _, fact, db_embedding_list, _ in all_rows:
-            db_embedding = np.array(db_embedding_list)
-            norm_db = np.linalg.norm(db_embedding)
-            if norm_db == 0:
-                continue
+        top_general = [mem[0] for mem in scored_general[:limit]]
 
-            similarity = np.dot(query_embedding, db_embedding) / (norm_query * norm_db)
-            scored_memories.append((fact, similarity))
-
-        # Sort by highest similarity score
-        scored_memories.sort(key=lambda x: x[1], reverse=True)
-        return [mem[0] for mem in scored_memories[:limit]]
+        # Combine core profile memories and relevant general memories, deduplicating them
+        combined = []
+        seen = set()
+        for m in (core_memories + top_general):
+            if m not in seen:
+                combined.append(m)
+                seen.add(m)
+        return combined
 
 
 long_term_memory = LongTermMemoryManager()

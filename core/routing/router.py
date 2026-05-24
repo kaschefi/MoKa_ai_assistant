@@ -2,7 +2,7 @@
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, START, END
 import os
-
+from dotenv import load_dotenv
 from schemas.memory_db import long_term_memory
 from schemas.request_models import AgentState, RouteDecision
 from actions.digital.n8n_agents import call_n8n_calendar, call_web_search
@@ -13,6 +13,9 @@ from psycopg import connect
 from psycopg.rows import dict_row
 from langgraph.checkpoint.postgres import PostgresSaver
 from langchain_core.messages import RemoveMessage
+from langsmith import traceable
+load_dotenv()
+
 
 GRAY = "\033[90m"
 RESET = "\033[0m"
@@ -134,7 +137,7 @@ def memory_extraction_node(state: AgentState):
     user_id = "cozmo_owner"
 
     import threading
-
+    @traceable(name="Long-Term Memory Fact Extraction", run_type="chain")
     def run_extraction_bg():
         try:
             selective_extraction_prompt = f"""You are a profile memory analyzer. Analyze the recent conversation history to see if the user shared permanent personal information.
@@ -391,8 +394,13 @@ except Exception as db_err:
 
 def run_cozmo_agent(user_input: str,thread_id: str = "cozmo_default_session") -> str:
     initial_state = {"messages": [HumanMessage(content=user_input)]}
-    config = {"configurable": {"thread_id": thread_id}}
-
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "metadata": {
+            "session_id": thread_id,
+            "application_mode": "Terminal" if thread_id.startswith("terminal") else "Physical_Cozmo"
+        }
+    }
     initial_state = {
         "messages": [HumanMessage(content=user_input)],
         "retrieved_memories": []  # Empty initial layer container
