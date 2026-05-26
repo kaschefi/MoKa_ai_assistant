@@ -8,6 +8,8 @@ from schemas import *
 from actions.physical.face import FaceLibrary
 from actions.physical.timer import run_timer_logic
 import asyncio
+import threading
+from actions.physical.listen import start_listening_loop
 
 
 @asynccontextmanager
@@ -17,6 +19,18 @@ async def lifespan(app: FastAPI):
     cozmo_manager.start()
     # Note: Using get_robot() based on connection.py definition
     app.state.face = FaceLibrary(cozmo_manager.get_robot())
+
+    # Start Cozmo's microphone voice listening loop in a background thread
+    print("🎙 [lifespan] Starting Cozmo Voice Listening thread...")
+    loop = asyncio.get_running_loop()
+    listener_thread = threading.Thread(
+        target=start_listening_loop,
+        args=(loop, app.state.face),
+        daemon=True
+    )
+    listener_thread.start()
+    print("🎙 [lifespan] Cozmo Voice Listening thread spawned.")
+
     yield
     print("Shutting down... releasing Cozmo.")
 

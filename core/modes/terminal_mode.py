@@ -5,8 +5,8 @@ import subprocess
 import time
 import threading
 from datetime import datetime
-from core.routing.semantic_layer import check_layer_1, execute_reflex, initialize_router
-from core.routing.router import run_cozmo_agent
+from core.routing.semantic_layer import check_layer_1, initialize_router
+from core.routing.brain import process_user_intent
 import asyncio
 from actions.physical.speak import respond
 
@@ -131,47 +131,21 @@ async def terminal_chat():
 
         print(f"{GRAY}Processing...{RESET}")
 
+        # Check layer 1 for animation decision
         layer_1_route = check_layer_1(command)
-
         if layer_1_route:
-            print(f"{GRAY} [LAYER 1 TRIGGERED]: Route -> '{layer_1_route}'{RESET}")
-
+            await process_user_intent(command, session_id=session_thread_id)
+        else:
+            done_event = threading.Event()
+            # run the animation in a separate thread
+            loading_thread = threading.Thread(target=animate_loading, args=(done_event,))
+            loading_thread.start()
             try:
-                if await execute_reflex(layer_1_route):
-                    print(f"{GRAY}---------------------------------------{RESET}\n")
-                    continue
-            except Exception as e:
-                print(f"{GRAY}Error executing reflex '{layer_1_route}': {e}{RESET}")
-
-            # Fallback for manual routes not in registry (or if registry execution failed/not implemented)
-            if layer_1_route == "get_date":
-                today = datetime.now().strftime("%A, %B %d, %Y")
-                await respond(f"Today is {today}.")
-            elif layer_1_route == "dock_with_charger":
-                await respond("Heading back to base! Disabling AI, triggering wheel motors...")
-            elif layer_1_route == "tell_joke":
-                await respond("Why do robots never get scared? Because they have nerves of steel!")
-
-            print(f"{GRAY}---------------------------------------{RESET}\n")
-            continue
-
-        done_event = threading.Event()
-        #run the animation in a separate thread
-        loading_thread = threading.Thread(target=animate_loading, args=(done_event,))
-        loading_thread.start()
-
-        try:
-            final_answer = run_cozmo_agent(command, thread_id=session_thread_id)
-            done_event.set()
-            loading_thread.join()
-            await respond(final_answer)
-        except Exception as e:
-            done_event.set()
-            loading_thread.join()
-            if "ConnectError" in str(type(e)) or "ConnectError" in str(e):
-                await respond("I'm having trouble connecting to my local brain (Ollama). Please ensure Ollama is running on port 11434.")
-            else:
-                await respond(f"Oops! I encountered an error: {e}")
+                await process_user_intent(command, session_id=session_thread_id)
+            finally:
+                done_event.set()
+                if loading_thread.is_alive():
+                    loading_thread.join()
 
         print(f"{GRAY}---------------------------------------{RESET}\n")
 

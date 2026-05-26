@@ -1,12 +1,9 @@
 import speech_recognition as sr
-import requests
 import re
 import asyncio
+import time
 
 WAKE_WORD = "hey buddy"
-N8N_WEBHOOK_URL = "http://localhost:5678/webhook/cozmo-voice"
-FASTAPI_TIMER_URL = "http://localhost:8000/actions/timer"
-
 
 def extract_seconds(text):
     """Finds numbers and units in a sentence (e.g., '5 minutes')"""
@@ -21,45 +18,81 @@ def extract_seconds(text):
     return number
 
 
-def start_listening():
+def start_listening_loop(loop: asyncio.AbstractEventLoop, face_library=None):
+    """
+    Core voice listening loop. Runs in a background thread of FastAPI
+    and schedules async brain logic back to FastAPI's main event loop.
+    """
     # Local imports to avoid circular dependency
-    from core.routing.semantic_layer import check_layer_1, execute_reflex
+    from core.routing.brain import process_user_intent
 
     recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("Cozmo is listening...")
+    
+    # We use a try-except to handle microphone initialization issues
+    try:
+        microphone = sr.Microphone()
+    except Exception as e:
+        print(f"🎙 [Voice Listener] ⚠ Could not initialize microphone: {e}")
+        return
+
+    with microphone as source:
+        print("🎙 [Voice Listener] Cozmo is listening... Adjusting for ambient noise...")
         recognizer.adjust_for_ambient_noise(source, duration=1)
+        print("🎙 [Voice Listener] Ready! Say 'Hey Buddy' followed by your command.")
 
         while True:
             try:
+                # Capture audio from the microphone
                 audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
                 text = recognizer.recognize_google(audio).lower()
-                print(f"Heard: {text}")
+                print(f" [Voice Listener] Heard: \"{text}\"")
 
                 if WAKE_WORD in text:
-                    command = text.replace(WAKE_WORD, "").strip()
-
-                    print("Checking Layer 1 (Semantic Reflexes)...")
-                    route_name = check_layer_1(command)
-
-                    if route_name:
-                        # if we find it in the layer 1 reflexes, we execute it
-                        asyncio.run(execute_reflex(route_name))
+                    command = text.split(WAKE_WORD, 1)[1].strip()
+                    if not command:
+                        print(" [Voice Listener] Wake word heard, but command was empty.")
                         continue
 
-                    if "timer" in command:
-                        seconds = extract_seconds(command)
-                        if seconds:
-                            print(f"Timer detected ({seconds}s). Sending to FastAPI...")
-                            requests.post(FASTAPI_TIMER_URL, json={"seconds": seconds})
-                            continue  # Skip n8n
+                    print(f" [Voice Listener] Triggering Command: \"{command}\"")
 
-                    #  EVERYTHING ELSE (n8n Route)
-                    print("Sending to n8n brain...")
-                    requests.post(N8N_WEBHOOK_URL, json={"user_input": command})
+                    # Generate a unique session thread ID for this voice session
+                    voice_session_id = f"voice_{int(time.time())}"
 
-            except Exception:
+                    # Safely schedule our async process_user_intent to run in the main FastAPI loop
+                    future = asyncio.run_coroutine_threadsafe(
+                        process_user_intent(command, session_id=voice_session_id),
+                        loop
+                    )
+
+                    # IMPORTANT: Block the listening thread until the coroutine completes.
+                    # This naturally pauses the microphone while Cozmo processes the LLM response
+                    # and speaks the text, preventing it from hearing itself and looping!
+                    print(" [Voice Listener] Suspended microphone listening during processing...")
+                    response = future.result()
+                    print("[Voice Listener] Processing complete. Resuming microphone listening...")
+
+            except sr.WaitTimeoutError:
+                # No speech detected within timeout, continue listening
                 continue
+            except sr.UnknownValueError:
+                # Speech was unintelligible, continue listening
+                continue
+            except Exception as e:
+                print(f"🎙 [Voice Listener] Error: {e}")
+                time.sleep(1)
+                continue
+
+
+def start_listening():
+    """
+    Standalone runner for local/terminal execution of voice loop.
+    Creates a new event loop and runs the listener.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # Run the listening loop directly in the main thread (blocking)
+    start_listening_loop(loop)
 
 
 if __name__ == "__main__":
