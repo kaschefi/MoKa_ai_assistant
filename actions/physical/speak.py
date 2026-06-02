@@ -1,180 +1,160 @@
-import pycozmo
-import time
-import os
 import asyncio
-import requests
-import uuid
-import edge_tts
 import re
-import io
-from pydub import AudioSegment
-from core.hardware.connection import cozmo_manager
-from deep_translator import GoogleTranslator
+import traceback
 
-# Global in-memory cache for translations to bypass slow network requests
-translation_cache = {}
+# Try to import sounddevice natively
+try:
+    import sounddevice as sd
+    import numpy as np
+    AUDIO_AVAILABLE = True
+except ImportError:
+    AUDIO_AVAILABLE = False
+    print("WARNING: sounddevice or numpy is not installed. Audio playback will be disabled.")
 
-def is_persian(text: str) -> bool:
-    """Detects if a string contains Persian/Arabic characters."""
-    return bool(re.search(r'[\u0600-\u06FF]', text))
-
-def translate_to_persian_with_ai(english_text: str) -> str:
-    # 1. Skip if already Persian
-    if is_persian(english_text):
-        return english_text
-
-    # 2. Check translation cache
-    cache_key = f"ai_{english_text}"
-    if cache_key in translation_cache:
-        print(f"Using cached AI translation: '{translation_cache[cache_key]}'")
-        return translation_cache[cache_key]
-
-    print(f"Translating to Persian using Gemma: '{english_text}'")
-    model_name = "mshojaei77/gemma3persian"
-    prompt = f"Translate the following English text to natural, conversational Persian (Farsi). Output ONLY the Persian text using the Persian alphabet. Do not include quotes, explanations, or English words.\n\nText: {english_text}"
-
-    try:
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": model_name, "prompt": prompt, "stream": False},
-            timeout=20
-        )
-        response.raise_for_status()
-        persian_text = response.json().get("response", "").strip()
-        print(f"Translation result: {persian_text}")
-        translation_cache[cache_key] = persian_text
-        return persian_text
-    except Exception as e:
-        print(f"Translation failed: {e}")
-        return english_text
-
-def translate_to_persian_with_google(english_text: str) -> str:
-    # 1. Skip if already Persian
-    if is_persian(english_text):
-        print(f"Text is already Persian, skipping translation: '{english_text}'")
-        return english_text
-
-    # 2. Check translation cache
-    cache_key = f"google_{english_text}"
-    if cache_key in translation_cache:
-        print(f"Using cached Google translation: '{translation_cache[cache_key]}'")
-        return translation_cache[cache_key]
-
-    print(f"Translating to Persian using Google Translate: '{english_text}'")
-    try:
-        persian_text = GoogleTranslator(source='en', target='fa').translate(english_text)
-        print(f"Translation result: {persian_text}")
-        translation_cache[cache_key] = persian_text
-        return persian_text
-    except Exception as e:
-        print(f"Translation failed: {e}")
-        return english_text
+# Try to import kokoro_onnx
+try:
+    from kokoro_onnx import Kokoro
+    KOKORO_AVAILABLE = True
+except ImportError:
+    KOKORO_AVAILABLE = False
+    print("WARNING: kokoro_onnx is not installed. VoiceSpeaker will fallback to silent mode.")
 
 
-def convert_to_cozmo_format(mp3_bytes: bytes, temp_wav: str):
-    """
-    Converts MP3 audio bytes in memory directly to a 22kHz mono WAV file on disk.
-    Avoids temporary MP3 file writes and shaves latency down.
-    """
-    print("Converting MP3 bytes to 22kHz WAV...")
-    
-    # Load MP3 straight from a RAM memory buffer
-    audio = AudioSegment.from_file(io.BytesIO(mp3_bytes), format="mp3")
+class VoiceSpeaker:
+    def __init__(self, model_path: str = "kokoro-v1.0.onnx", voices_path: str = "voices-v1.0.bin"):
+        """
+        Initializes the VoiceSpeaker engine with zero-disk I/O Kokoro ONNX model.
 
-    # Shave silence prepending down from 500ms to 150ms.
-    # 150ms is more than enough to stabilize PyCozmo buffers while saving 350ms of lag!
-    silence = AudioSegment.silent(duration=150)
-    audio = silence + audio
+        """
+        self.model_path = model_path
+        self.voices_path = voices_path
+        self.kokoro = None
+        self.sample_rate = 24000  # Default for Kokoro v0.19
 
-    audio = audio.set_frame_rate(22050).set_channels(1).set_sample_width(2)
-    audio.export(temp_wav, format="wav")
+        self._initialize_model()
 
+    def _initialize_model(self):
+        """loads the model into memory at boot time."""
+        if not KOKORO_AVAILABLE or not AUDIO_AVAILABLE:
+            return
 
-def _play_audio_blocking(wav_file: str, play_animation: bool, text: str = None):
-    cli = cozmo_manager.get_robot()
-    if not cli:
-        if text:
-            print(f"Robot not connected. Cozmo would say: \"{text}\"")
-        return
+        try:
+            print("[VoiceSpeaker] Initializing Kokoro TTS engine into memory...")
+            # Load the model into memory once at boot time
+            self.kokoro = Kokoro(self.model_path, self.voices_path)
+            print("[VoiceSpeaker] Kokoro TTS Engine initialized successfully.")
+        except Exception as e:
+            print(f"[WARNING] VoiceSpeaker failed to initialize Kokoro model: {e}")
+            print("[WARNING] Audio generation will be silently skipped to prevent crashing.")
+            self.kokoro = None
 
-    if play_animation:
-        cli.move_head(1.0)
-        time.sleep(0.5)
+    def _sanitize_text(self, text: str) -> str:
+        """
+        Dynamic Token Sanitization:
+        Strips out raw formatting notation like backticks, clean markdown punctuation, 
+        and edge-case characters to prevent reading aloud code syntax.
+        """
+        # Remove markdown code blocks (```...```)
+        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+        # Remove inline code backticks (`...`)
+        text = re.sub(r'`[^`]*`', '', text)
+        # Remove URLs
+        text = re.sub(r'https?://\S+', '', text)
+        # Remove asterisks, underscores, tildes, and hashes
+        text = re.sub(r'[*_~#]', '', text)
+        # Replace newlines with spaces for a smoother continuous read
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
 
-    print("Streaming to Cozmo...")
-    cli.set_volume(65535)
-    cli.play_audio(wav_file)
-    cli.wait_for(pycozmo.event.EvtAudioCompleted)
+    def _generate_audio_blocking(self, text: str, voice: str, speed: float = 1.0) -> 'Any':
+        """
+        Heavy ONNX matrix math generation pass (Blocking).
+        This must be run in an executor to avoid freezing the main thread.
+        """
+        if not self.kokoro:
+            return None
 
-    if play_animation:
-        cli.move_head(0.0)
-        time.sleep(0.5)
+        try:
+            # Kokoro create() generates text-to-speech entirely in memory
+            # Returns: audio_array (float32 numpy array), sample_rate (int)
+            samples, sample_rate = self.kokoro.create(
+                text, voice=voice, speed=speed, lang="en-us"
+            )
+            self.sample_rate = sample_rate
+            return samples
+        except Exception as e:
+            print(f"[VoiceSpeaker] Error during ONNX generation: {e}")
+            traceback.print_exc()
+            return None
 
-    # Delete the final WAV file only after Cozmo finishes talking
-    if os.path.exists(wav_file):
-        os.remove(wav_file)
-
-
-async def speak_text(text: str, play_animation: bool = True, language: str = "en"):
-    try:
-        start_time = time.time()
-
-        # 1. Smart Language Translation & Skip Check
-        if language == "fa":
-            # If the source text is already Farsi, bypass translation network calls completely!
-            if is_persian(text):
-                text_to_speak = text
-                print(f"[Speak Optimization] Bypassed Google Translate (already Persian): \"{text}\"")
-            else:
-                text_to_speak = await asyncio.to_thread(translate_to_persian_with_google, text)
-            voice = "fa-IR-FaridNeural"
-        else:
-            text_to_speak = text
-            voice = "en-US-ChristopherNeural"
-
-        # Unique session ID for safe file cleanup
-        file_id = str(uuid.uuid4())[:8]
-        temp_wav = f"speech_{file_id}.wav"
-
-        # 2. In-Memory MP3 Speech Generation
-        print("[Speak Optimization] Generating Edge-TTS audio directly to memory...")
-        communicate = edge_tts.Communicate(text_to_speak, voice)
+    def _play_audio_blocking(self, audio_array: 'Any'):
+        """
+        Plays back raw numpy arrays natively using sounddevice (Blocking).
+        """
+        if audio_array is None or len(audio_array) == 0:
+            return
         
-        mp3_data = bytearray()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                mp3_data.extend(chunk["data"])
-        mp3_bytes = bytes(mp3_data)
+        if not AUDIO_AVAILABLE:
+            return
 
-        # 3. Transcode MP3 Bytes straight to WAV on disk (No temporary MP3 file on disk!)
-        await asyncio.to_thread(convert_to_cozmo_format, mp3_bytes, temp_wav)
+        try:
+            # Hand off the generated float32 or int16 numpy array natively to the sound hardware driver
+            # This directly communicates with the host OS audio output (e.g. WASAPI, CoreAudio, ALSA)
+            sd.play(audio_array, samplerate=self.sample_rate)
+            
+            # Wait for the playback to finish to ensure non-overlapping speech 
+            # and to block the offloaded thread appropriately until speaking is done.
+            sd.wait()
+        except Exception as e:
+            print(f"[VoiceSpeaker] Error during sounddevice playback: {e}")
 
-        # 4. Stream final WAV to Cozmo in a background thread
-        await asyncio.to_thread(_play_audio_blocking, temp_wav, play_animation, text_to_speak)
+    async def say(self, text: str, voice: str = "am_echo", speed: float = 1.0) -> None:
+        """
+        Non-Blocking Async Design:
+        Offloads generation to background thread, then streams to hardware natively.
+        """
+        if not text:
+            return
 
-        end_time = time.time()
-        print(f"[Speak Optimization] Total speech processing time: {round(end_time - start_time, 2)} seconds")
+        sanitized_text = self._sanitize_text(text)
+        if not sanitized_text:
+            return
 
-        return {"status": "success", "message": "Cozmo successfully spoke."}
+        loop = asyncio.get_running_loop()
 
-    except Exception as e:
-        print(f"Error during speech: {e}")
-        return {"status": "error", "message": str(e)}
+        # Thread-Safe Offloading: 
+        # Offload the heavy ONNX matrix math generation pass to a background thread pool executor
+        audio_array = await loop.run_in_executor(
+            None, self._generate_audio_blocking, sanitized_text, voice, speed
+        )
 
+        if audio_array is not None:
+            # Play the generated audio array via sounddevice without blocking the async event loop
+            await loop.run_in_executor(None, self._play_audio_blocking, audio_array)
+
+
+# Global instance for easy import across the project
+speaker = VoiceSpeaker()
+
+
+# -------------------------------------------------------------------------
+# Legacy Adapters (Preserved to prevent breaking other modules)
+# -------------------------------------------------------------------------
 
 async def respond(text: str, play_animation: bool = True, language: str = "en"):
     """
-    Unified system response coordinator.
-    Always prints to the terminal with beautiful styling,
-    and speaks via PyCozmo if running in physical robot mode.
+    Unified system response coordinator (Updated to use local Kokoro TTS).
+    Always prints to the terminal with beautiful styling.
     """
     # Print response text directly in blue color with no prefix
     print(f"\n\033[94m{text}\033[0m\n")
     
-    # Check if we are in physical robot mode and the client is active
-    if cozmo_manager.robot_mode and cozmo_manager.get_robot():
-        # Auto-detect language to Persian if it contains Persian/Arabic unicode characters
-        lang = "fa" if is_persian(text) else language
-        return await speak_text(text, play_animation, lang)
-    
-    return {"status": "success", "message": "Printed response to terminal."}
+    # Bypass language translation networks to stay offline, route immediately to local Kokoro.
+    await speaker.say(text, voice="am_echo")
+        
+    return {"status": "success", "message": "Response processed via local VoiceSpeaker."}
+
+
+async def speak_text(text: str, play_animation: bool = True, language: str = "en"):
+    """Legacy wrapper for speak_text"""
+    return await respond(text, play_animation, language)

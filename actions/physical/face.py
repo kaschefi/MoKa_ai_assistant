@@ -1,21 +1,29 @@
 from PIL import Image, ImageDraw, ImageFont
 import pycozmo
+from core.hardware.connection import cozmo_manager
 
 class FaceLibrary:
-    def __init__(self, cli):
-        self.cli = cli
+    def __init__(self, cli=None):
+        self._cli = cli
         self.width = 128
-        self.height = 32  # Cozmo screen height is strictly 32 pixels!
+        self.height = 32
+    @property
+    def cli(self):
+        if self._cli is not None:
+            return self._cli
+        return cozmo_manager.get_robot()
 
     def _get_base_canvas(self):
         return Image.new('1', (self.width, self.height), 0)
 
     def act_timer(self, time_str):
-        """Draws a beautiful timer with a centered clock icon on 128x32 OLED"""
+        try:
+            self.cli.enable_procedural_face(False)
+        except Exception:
+            pass
         img = self._get_base_canvas()
         draw = ImageDraw.Draw(img)
-        
-        # Load standard system font
+
         try:
             font = ImageFont.truetype("arial.ttf", 20)
         except IOError:
@@ -35,14 +43,18 @@ class FaceLibrary:
     def act_weather(self, temp, condition):
         """
         Premium weather display on Cozmo's 128x32 OLED:
-        - Left Side: Smaller elegant temperature reading (e.g. 14 C)
+        - Left Side: Smalltemperature reading (e.g. 14 C)
         - Center: Open, divider-free layout
-        - Right Side: Custom-drawn, enlarged thematic pixel icon (centered at cx=85, cy=16)
+        - Right Side: Custom-drawn, enlarged thematic pixel icon
         """
+        try:
+            self.cli.enable_procedural_face(False)
+        except Exception:
+            pass
         img = self._get_base_canvas()
         draw = ImageDraw.Draw(img)
 
-        # 1. Load system fonts
+        # Load system fonts
         try:
             temp_font = ImageFont.truetype("arial.ttf", 12)
             unit_font = ImageFont.truetype("arial.ttf", 8)
@@ -50,15 +62,14 @@ class FaceLibrary:
             temp_font = ImageFont.load_default()
             unit_font = ImageFont.load_default()
 
-        # 2. Draw Left Side: Temperature Reading
-        # Normalize temp format
+        # Draw Left Side: Temperature Reading
         clean_temp = str(temp).replace("+", "").replace("-", "").strip()
         is_negative = str(temp).startswith("-")
         
         display_text = f"-{clean_temp}" if is_negative else clean_temp
         draw.text((10, 10), display_text, font=temp_font, fill=1)
         
-        # Safely measure text width (fully exception-proof across PIL versions)
+        # Safely measure text width
         try:
             if hasattr(draw, 'textlength'):
                 num_width = int(draw.textlength(display_text, font=temp_font))
@@ -69,16 +80,15 @@ class FaceLibrary:
         except Exception:
             num_width = len(display_text) * 7
         
-        # Draw the tiny degree circle manually (100% safe from font encoding crashes on default fonts!)
+        # Draw the tiny degree circle manually
         deg_x = 10 + num_width + 2
         draw.ellipse((deg_x, 8, deg_x + 2, 10), outline=1)
-        
-        # Draw the letter "C"
+
         draw.text((deg_x + 5, 8), "C", font=unit_font, fill=1)
 
-        # 3. Draw Right Side: Custom Enlarged Weather Thematic Icon
+        # Draw Right Side: Custom Enlarged Weather Thematic Icon
         cond = str(condition).lower().strip()
-        cx, cy = 85, 16  # Center shifted to 85 to occupy more center-right screen space
+        cx, cy = 85, 16
 
         if cond == "sunny":
             # Drawing an enlarged radiating Sun
@@ -132,6 +142,10 @@ class FaceLibrary:
 
     def act_thinking(self):
         """Draws a beautiful thinking screen on 128x32 OLED"""
+        try:
+            self.cli.enable_procedural_face(False)
+        except Exception:
+            pass
         img = self._get_base_canvas()
         draw = ImageDraw.Draw(img)
         try:
@@ -150,6 +164,10 @@ class FaceLibrary:
 
     def act_reset(self):
         """Returns Cozmo to his standard eyes by drawing them customly (bypasses missing anim group errors)"""
+        try:
+            self.cli.enable_procedural_face(True)
+        except Exception:
+            pass
         img = self._get_base_canvas()
         draw = ImageDraw.Draw(img)
         

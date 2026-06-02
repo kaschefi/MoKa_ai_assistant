@@ -15,7 +15,7 @@ from actions.physical.speak import respond
 async def tell_time():
     current_time = datetime.now().strftime("%I:%M %p")
     msg = f"The time is exactly {current_time}."
-    await respond(msg, language="en")
+    await respond(msg)
 
 @reflex_registry.reflex(
     name="get_date",
@@ -30,4 +30,4 @@ async def tell_time():
 async def get_date():
     today = datetime.now().strftime("%A, %B %d, %Y")
     msg = f"Today is {today}."
-    await respond(msg, language="en")
+    await respond(msg)

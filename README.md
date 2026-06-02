@@ -10,7 +10,7 @@ An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a
 |---|---|
 | **Interactive Launcher** | Unified `main.py` console with a menu to run Terminal Mode (repl with brain) or Cozmo Mode (robot + API server) |
 | **Voice Input** | Wake-word listener (`"hey buddy"`) captures mic audio, transcribes via Google Speech Recognition, and routes to Layer 1 reflexes or LangGraph |
-| **Text-to-Speech** | Speeds responses using Microsoft Edge TTS, supporting both **English & Persian (Farsi)** with high-fidelity neural voices |
+| **Text-to-Speech** | Zero-disk I/O local TTS using **Kokoro-ONNX** for near-studio quality human expressions, offloaded to async background threads (implementation inspired by OpenJarvis) |
 | **Layer 1 Semantic Router** | Instant intent matching (~50ms) using `semantic-router` + `FastEmbed` for latency-critical commands (bypasses LLM) |
 | **Dynamic Layer 2 Tool RAG** | Rather than bloating LLM prompts with static definitions, tools are indexed in an in-memory vector database (**FAISS** + `BAAI/bge-small-en-v1.5` embeddings) and dynamically injected into the router's context based on relevance |
 | **Tavily MCP Integration** | Executes highly optimized, real-time web searches using the official Tavily **Model Context Protocol (MCP)** server spawned via standard `npx` stdio client pipes |
@@ -133,8 +133,8 @@ cozmo_ai_assistant/
 │   │   ├── __init__.py
 │   │   ├── charger.py          # Vision-guided docking using OpenCV HSV color filtering (Yellow-Green, RGB 204, 255, 51)
 │   │   ├── face.py             # OLED canvas draw actions (Timer MM:SS, weather details, thinking indicator)
-│   │   ├── listen.py           # Speech recognition wake-word parser ("hey buddy") and FastAPI/n8n forwarder
-│   │   ├── speak.py            # edge-tts engine + Persian Gemma translator + 22kHz wav converter
+│   │   ├── listen.py           # Speech recognition wake-word parser ("hey buddy") (implementation inspired by OpenJarvis)
+│   │   ├── speak.py            # Kokoro-ONNX zero-disk I/O local TTS engine (implementation inspired by OpenJarvis)
 │   │   └── timer.py            # Asynchronous countdown clock controller
 │   │
 │   └── digital/                # Digital APIs & Agent integrations
