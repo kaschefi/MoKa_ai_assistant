@@ -264,13 +264,18 @@ class VoiceSpeaker:
             # Convert float32 to 16-bit PCM
             pcm_data = np.clip(resampled * 32767.0, -32768, 32767).astype(np.int16)
 
+            # Prepend 0.5 seconds of silence to allow Cozmo's hardware speaker to wake up
+            silence_samples = int(22050 * 0.5)
+            silence_data = np.zeros(silence_samples, dtype=np.int16)
+            final_pcm_data = np.concatenate((silence_data, pcm_data))
+
             # Save to temporary WAV file using python's built-in wave module
             import wave
             with wave.open("temp_speech.wav", "wb") as wav_file:
                 wav_file.setnchannels(1)  # mono
                 wav_file.setsampwidth(2)  # 16-bit (2 bytes)
                 wav_file.setframerate(22050)  # 22050 Hz
-                wav_file.writeframes(pcm_data.tobytes())
+                wav_file.writeframes(final_pcm_data.tobytes())
 
         except Exception as e:
             print(f"[VoiceSpeaker] Error generating robot audio: {e}")
@@ -308,10 +313,15 @@ class VoiceSpeaker:
                     cli.set_volume(65535)
                 except Exception as e:
                     print(f"[VoiceSpeaker] Failed to set volume: {e}")
+                
+                # Signal active speaking status and offload blocking wait to thread pool
+                self._actively_speaking = True
                 cli.play_audio(wav_path)
-                cli.wait_for(pycozmo.event.EvtAudioCompleted)
+                await loop.run_in_executor(None, cli.wait_for, pycozmo.event.EvtAudioCompleted)
             except Exception as e:
                 print(f"[VoiceSpeaker] Error playing audio on Cozmo: {e}")
+            finally:
+                self._actively_speaking = False
             return
 
         # PC Speaker Fallback:
