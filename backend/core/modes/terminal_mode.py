@@ -156,7 +156,7 @@ if __name__ == "__main__":
     import os
 
     # Ensure the root folder is in the path so it can find main.py
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
     import main
 

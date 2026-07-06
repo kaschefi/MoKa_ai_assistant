@@ -1,5 +1,8 @@
+import os
 import sys
 import uvicorn
+# Ensure backend directory is in the Python search path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend'))
 
 
 def main():

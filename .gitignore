@@ -211,3 +211,13 @@ roadmap.md
 Launch_Cozmo.bat
 .idea
 
+# Large Model Files
+kokoro-v1.0.onnx
+voices-v1.0.bin
+
+# Temporary Speech / Audio
+temp_speech.wav
+*.wav
+
+# JetBrains Evaluation
+.jbeval/
