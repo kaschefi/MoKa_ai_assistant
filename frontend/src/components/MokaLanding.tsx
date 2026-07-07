@@ -1,7 +1,6 @@
 import React from 'react';
 import Header from './ui/Header';
-import WelcomeCard from './ui/WelcomeCard';
-import FeatureGrid from './ui/FeatureGrid';
+import FeatureMarquee from './ui/FeatureMarquee';
 import ParticleCanvas from './ui/ParticleCanvas';
 
 /**
@@ -11,19 +10,19 @@ import ParticleCanvas from './ui/ParticleCanvas';
  */
 export const MokaLanding: React.FC = () => {
   return (
-    <div className="relative min-h-[200vh] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-x-hidden select-none">
+    <div className="relative min-h-[180vh] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-x-hidden select-none">
       {/* Subtle digital grid overlay */}
-      <div 
+      <div
         className="absolute inset-0 pointer-events-none opacity-[0.03] z-10"
         style={{
           backgroundImage: 'radial-gradient(circle, #00f3ff 1px, transparent 1px)',
           backgroundSize: '30px 30px'
         }}
       />
-      
+
       {/* Fixed Sticky Header Bar */}
       <Header />
-      
+
       {/* Fixed canvas on top of everything so particles float over the header and content */}
       <ParticleCanvas />
 
@@ -32,11 +31,8 @@ export const MokaLanding: React.FC = () => {
 
       {/* Foreground content card that scrolls up */}
       <div className="relative w-full max-w-5xl mx-auto px-6 pt-[105vh] pb-32 z-20 pointer-events-auto">
-        {/* Welcome card introducing the ecosystem */}
-        <WelcomeCard />
-
-        {/* Feature Grid representing three core services */}
-        <FeatureGrid />
+        {/* Infinite scrolling showcase of Cozmo Agent capabilities */}
+        <FeatureMarquee />
       </div>
     </div>
   );

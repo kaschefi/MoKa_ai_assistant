@@ -94,12 +94,11 @@ export const ParticleCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Keep animation state in refs for high-performance retrieval inside requestAnimationFrame
-  const stateRef = useRef<'eyes' | 'transitioning' | 'moka'>('eyes');
+  const stateRef = useRef<'eyes' | 'transitioning' | 'moka'>('transitioning');
   const particlesRef = useRef<Particle[]>([]);
   const animationFrameId = useRef<number | null>(null);
   const cycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScrolledRef = useRef(false);
-  const hasShownWelcomeRef = useRef(false);
   const mouseRef = useRef({ x: 0, y: 0 });
   const mouseTargetRef = useRef({ x: 0, y: 0 });
   const mousePosTargetRef = useRef({ x: -9999, y: -9999 });
@@ -357,7 +356,7 @@ export const ParticleCanvas: React.FC = () => {
 
         // Easing factor with variation: transition smoothly if far (using config speed), track instantly if close (mouse avoidance/gaze)
         const ease = currentState === 'eyes'
-          ? (dist > 180 ? (CONFIG.TRANSITION_SPEED + p.speedOffset * CONFIG.TRANSITION_VARIATION) : (0.04 + p.speedOffset * 0.08))
+          ? (dist > 180 ? (CONFIG.TRANSITION_SPEED + p.speedOffset * CONFIG.TRANSITION_VARIATION) : (0.1 + p.speedOffset * 0.08))
           : CONFIG.TRANSITION_SPEED + p.speedOffset * CONFIG.TRANSITION_VARIATION;
 
         // Swarming curving perturbation: decays as particles reach targets (disable for steady eyes/moka to avoid slow-motion drift)
@@ -398,22 +397,24 @@ export const ParticleCanvas: React.FC = () => {
 
     render();
 
-    // Loop cycle: 10s eyes -> 10s welcome -> repeat (active only when not scrolled)
+    // Loop cycle: 3s welcome -> 30s eyes -> repeat (active only when not scrolled)
     const runCycle = () => {
       if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current);
-      if (hasShownWelcomeRef.current && stateRef.current === 'eyes') return;
+      if (isScrolledRef.current) return;
+
+      const currentState = stateRef.current;
+      const delay = currentState === 'transitioning' ? 3000 : 30000;
 
       cycleTimerRef.current = setTimeout(() => {
-        if (isScrolledRef.current) return; // do not cycle if user is scrolled down
+        if (isScrolledRef.current) return;
 
-        if (stateRef.current === 'eyes') {
-          stateRef.current = 'transitioning';
-          hasShownWelcomeRef.current = true;
-          runCycle();
-        } else {
+        if (stateRef.current === 'transitioning') {
           stateRef.current = 'eyes';
+        } else {
+          stateRef.current = 'transitioning';
         }
-      }, 4000);
+        runCycle();
+      }, delay);
     };
 
     runCycle();
