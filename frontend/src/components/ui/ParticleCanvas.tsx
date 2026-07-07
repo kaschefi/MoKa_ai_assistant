@@ -56,6 +56,11 @@ export interface Particle {
   speedOffset: number;
   seed: number;
   isFadingOut: boolean;
+
+  // Stateful routing flags to prevent corner turn jitter
+  hasTurnedDown?: boolean;
+  hasTurnedUp?: boolean;
+  hasSpread?: boolean;
 }
 
 
@@ -316,6 +321,10 @@ export const ParticleCanvas: React.FC = () => {
         let pTargetAlpha = 1.0;
 
         if (currentState === 'eyes') {
+          p.hasTurnedDown = false;
+          p.hasTurnedUp = true; // bypass L-path constraints for eyes -> logo transition
+          p.hasSpread = true;
+
           // 1. Calculate base coordinates relative to local eye center (400 or 800)
           const cx = p.eyeX < 600 ? 400 : 800;
           const cy = 300;
@@ -344,6 +353,9 @@ export const ParticleCanvas: React.FC = () => {
           targetY = (scaledY + shiftY) * scale + offsetY + idleY;
           pTargetAlpha = 1.0;
         } else if (currentState === 'talk-button' && buttonRect) {
+          p.hasTurnedUp = false; // reset up-turn flag
+          p.hasSpread = false;   // reset spread flag
+
           const isButtonActive = (i % 5) === 0; // Only use 20% of particles for a clean, non-overcrowded border
           
           if (isButtonActive) {
@@ -364,43 +376,103 @@ export const ParticleCanvas: React.FC = () => {
             const t = ((i / particles.length) + (time * 0.002) * (0.8 + p.speedOffset * 0.4)) % 1.0;
             const dist = t * perimeter;
             
+            let destX = 0;
+            let destY = 0;
             if (dist < w) {
               // Top edge
-              targetX = left + dist;
-              targetY = top;
+              destX = left + dist;
+              destY = top;
             } else if (dist < w + h) {
               // Right edge
-              targetX = left + w;
-              targetY = top + (dist - w);
+              destX = left + w;
+              destY = top + (dist - w);
             } else if (dist < 2 * w + h) {
               // Bottom edge
-              targetX = left + w - (dist - w - h);
-              targetY = top + h;
+              destX = left + w - (dist - w - h);
+              destY = top + h;
             } else {
               // Left edge
-              targetX = left;
-              targetY = top + h - (dist - 2 * w - h);
+              destX = left;
+              destY = top + h - (dist - 2 * w - h);
             }
 
             // Add subtle organic micro-vibration
-            targetX += Math.sin(time * 0.08 + p.seed) * 1.5;
-            targetY += Math.cos(time * 0.08 + p.seed) * 1.5;
+            destX += Math.sin(time * 0.08 + p.seed) * 1.5;
+            destY += Math.cos(time * 0.08 + p.seed) * 1.5;
+
+            // --- STATEFUL L-SHAPED ROUTING: DOWN FIRST, THEN RIGHT ---
+            const pathTurnY = destY - 120;
+            if (p.y >= pathTurnY) {
+              p.hasTurnedDown = true;
+            }
+
+            if (p.hasTurnedDown) {
+              targetX = destX;
+              targetY = destY;
+            } else {
+              targetX = 48 + (p.seed * 20) % 24; // stay near left edge with horizontal spread
+              targetY = destY;                  // pull vertically towards destination height
+            }
 
             pTargetAlpha = 1.0;
           } else {
             // Fade out the remaining 80% of particles and target the logo
             pTargetAlpha = 0.0;
             const logoScale = 0.38;
-            targetX = 48 + p.mokaX * logoScale;
-            targetY = 29 + p.mokaY * logoScale;
+            const destX = 48 + p.mokaX * logoScale;
+            const destY = 29 + p.mokaY * logoScale;
+
+            // Route: LEFT FIRST, THEN UP, THEN SPREAD OUT
+            if (p.x <= 80) {
+              p.hasTurnedUp = true;
+            }
+            if (p.hasTurnedUp && p.y <= 90) {
+              p.hasSpread = true;
+            }
+
+            if (p.hasSpread) {
+              targetX = destX;
+              targetY = destY;
+            } else if (p.hasTurnedUp) {
+              targetX = 48; // stay in the left vertical channel
+              targetY = destY;
+            } else {
+              targetX = 48; // go to the left vertical channel first
+              targetY = p.y;
+            }
           }
         } else if (currentState === 'moka' || currentState === 'talk-button') {
+          p.hasTurnedDown = false; // reset down-turn flag
+
           // MOKA logo at top-left, centered vertically inside the fixed 96px header (or fallback if button not found)
           const logoScale = 0.38;
-          targetX = 48 + p.mokaX * logoScale;
-          targetY = 29 + p.mokaY * logoScale;
+          const destX = 48 + p.mokaX * logoScale;
+          const destY = 29 + p.mokaY * logoScale;
+
+          // Route: LEFT FIRST, THEN UP, THEN SPREAD OUT
+          if (p.x <= 80) {
+            p.hasTurnedUp = true;
+          }
+          if (p.hasTurnedUp && p.y <= 90) {
+            p.hasSpread = true;
+          }
+
+          if (p.hasSpread) {
+            targetX = destX;
+            targetY = destY;
+          } else if (p.hasTurnedUp) {
+            targetX = 48; // stay in the left vertical channel
+            targetY = destY;
+          } else {
+            targetX = 48; // go to the left vertical channel first
+            targetY = p.y;
+          }
           pTargetAlpha = p.mokaAlpha; // inactive particles fade to 0 opacity
         } else {
+          p.hasTurnedDown = false;
+          p.hasTurnedUp = true; // bypass L-path constraints for welcome -> logo transition
+          p.hasSpread = true;
+
           // WELCOME coordinates
           targetX = p.welcomeX * scale + offsetX;
           targetY = p.welcomeY * scale + offsetY;
