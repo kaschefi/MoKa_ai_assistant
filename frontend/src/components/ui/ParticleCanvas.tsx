@@ -100,6 +100,7 @@ export const ParticleCanvas: React.FC = () => {
 
   // Keep animation state in refs for high-performance retrieval inside requestAnimationFrame
   const stateRef = useRef<'eyes' | 'transitioning' | 'moka' | 'talk-button'>('transitioning');
+  const lastStateRef = useRef<string>('transitioning');
   const particlesRef = useRef<Particle[]>([]);
   const animationFrameId = useRef<number | null>(null);
   const cycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,6 +309,22 @@ export const ParticleCanvas: React.FC = () => {
         }
       }
 
+      // Reset routing flags on state change to prevent transition glitches
+      if (lastStateRef.current !== currentState) {
+        if (lastStateRef.current === 'talk-button' && currentState === 'moka') {
+          for (let i = 0; i < particles.length; i++) {
+            particles[i].hasTurnedUp = false;
+            particles[i].hasSpread = false;
+          }
+        }
+        if (lastStateRef.current === 'moka' && currentState === 'talk-button') {
+          for (let i = 0; i < particles.length; i++) {
+            particles[i].hasTurnedDown = false;
+          }
+        }
+        lastStateRef.current = currentState;
+      }
+
       // Disable native shadowBlur to prevent performance drops and slow-motion lag!
       ctx.shadowBlur = 0;
       ctx.shadowColor = 'transparent';
@@ -353,10 +370,8 @@ export const ParticleCanvas: React.FC = () => {
           targetY = (scaledY + shiftY) * scale + offsetY + idleY;
           pTargetAlpha = 1.0;
         } else if (currentState === 'talk-button' && buttonRect) {
-          p.hasTurnedUp = false; // reset up-turn flag
-          p.hasSpread = false;   // reset spread flag
-
-          const isButtonActive = (i % 5) === 0; // Only use 20% of particles for a clean, non-overcrowded border
+          // Select button-active particles only from the active logo particles (to act as a unified unit)
+          const isButtonActive = p.mokaAlpha > 0.5 && (i % 5 !== 0);
           
           if (isButtonActive) {
             const cx = buttonRect.left + buttonRect.width / 2;
@@ -372,8 +387,8 @@ export const ParticleCanvas: React.FC = () => {
             
             const perimeter = 2 * (w + h);
             
-            // Compute t (0 to 1) based on index and speed offset
-            const t = ((i / particles.length) + (time * 0.002) * (0.8 + p.speedOffset * 0.4)) % 1.0;
+            // Compute t (0 to 1) based on seed and speed offset to distribute uniformly along the perimeter
+            const t = ((p.seed % 1.0) + (time * 0.0006) * (0.8 + p.speedOffset * 0.4)) % 1.0;
             const dist = t * perimeter;
             
             let destX = 0;
@@ -416,30 +431,11 @@ export const ParticleCanvas: React.FC = () => {
 
             pTargetAlpha = 1.0;
           } else {
-            // Fade out the remaining 80% of particles and target the logo
+            // Fade out the remaining 90% of particles in place at the logo
             pTargetAlpha = 0.0;
             const logoScale = 0.38;
-            const destX = 48 + p.mokaX * logoScale;
-            const destY = 29 + p.mokaY * logoScale;
-
-            // Route: LEFT FIRST, THEN UP, THEN SPREAD OUT
-            if (p.x <= 80) {
-              p.hasTurnedUp = true;
-            }
-            if (p.hasTurnedUp && p.y <= 90) {
-              p.hasSpread = true;
-            }
-
-            if (p.hasSpread) {
-              targetX = destX;
-              targetY = destY;
-            } else if (p.hasTurnedUp) {
-              targetX = 48; // stay in the left vertical channel
-              targetY = destY;
-            } else {
-              targetX = 48; // go to the left vertical channel first
-              targetY = p.y;
-            }
+            targetX = 48 + p.mokaX * logoScale;
+            targetY = 29 + p.mokaY * logoScale;
           }
         } else if (currentState === 'moka' || currentState === 'talk-button') {
           p.hasTurnedDown = false; // reset down-turn flag
@@ -551,7 +547,7 @@ export const ParticleCanvas: React.FC = () => {
       if (isScrolledRef.current) return;
 
       const currentState = stateRef.current;
-      const delay = currentState === 'transitioning' ? 3000 : 30000;
+      const delay = currentState === 'transitioning' ? 5000 : 30000;
 
       cycleTimerRef.current = setTimeout(() => {
         if (isScrolledRef.current) return;

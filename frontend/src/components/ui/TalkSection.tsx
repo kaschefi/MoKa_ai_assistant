@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { VoiceWaveform } from './VoiceWaveform';
 
-export const TalkSection: React.FC = () => {
+interface TalkSectionProps {
+  onStartChat?: () => void;
+}
+
+export const TalkSection: React.FC<TalkSectionProps> = ({ onStartChat }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -24,6 +28,7 @@ export const TalkSection: React.FC = () => {
         {/* Target button for the swarming particle halo */}
         <button
           id="talk-button"
+          onClick={onStartChat}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           className="relative px-8 py-4 rounded-xl bg-slate-950/50 border border-cyan-500/50 hover:border-cyan-400 text-white font-bold tracking-wide shadow-[0_0_20px_rgba(0,243,255,0.15)] hover:shadow-[0_0_30px_rgba(0,243,255,0.3)] transition-all duration-300 hover:scale-[1.02] active:scale-95 flex items-center gap-3 cursor-pointer"
@@ -31,7 +36,7 @@ export const TalkSection: React.FC = () => {
           <svg className="w-5 h-5 text-cyan-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
           </svg>
-          <span>Initialize Assistant</span>
+          <span>Start a conversation</span>
         </button>
       </div>
 

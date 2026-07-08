@@ -56,3 +56,25 @@ html, body, #root {
 .marquee-container:hover .animate-marquee-right {
   animation-play-state: paused;
 }
+
+@keyframes flow-dot {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-flow-dot {
+  animation: flow-dot 2.5s infinite linear;
+}
+

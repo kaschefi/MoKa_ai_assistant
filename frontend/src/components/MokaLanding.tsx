@@ -1,5 +1,6 @@
 import React from 'react';
 import Header from './ui/Header';
+import ProjectIntro from './ui/ProjectIntro';
 import FeatureMarquee from './ui/FeatureMarquee';
 import TalkSection from './ui/TalkSection';
 import ParticleCanvas from './ui/ParticleCanvas';
@@ -9,7 +10,11 @@ import ParticleCanvas from './ui/ParticleCanvas';
  * Abstracted into modular sub-components for enhanced readability, separation of concerns,
  * and component-driven architecture.
  */
-export const MokaLanding: React.FC = () => {
+interface MokaLandingProps {
+  onStartChat?: () => void;
+}
+
+export const MokaLanding: React.FC<MokaLandingProps> = ({ onStartChat }) => {
   return (
     <div className="relative min-h-[220vh] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-x-hidden select-none">
       {/* Subtle digital grid overlay */}
@@ -31,12 +36,18 @@ export const MokaLanding: React.FC = () => {
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(2,5,18,0.85)_100%)] pointer-events-none z-16" />
 
       {/* Foreground content card that scrolls up */}
-      <div className="relative w-full max-w-5xl mx-auto px-6 pt-[105vh] pb-32 z-20 pointer-events-auto">
-        {/* Infinite scrolling showcase of Cozmo Agent capabilities */}
-        <FeatureMarquee />
+      <div className="relative w-full pt-[105vh] pb-32 z-20 pointer-events-auto flex flex-col gap-20">
+        {/* Technical Architecture Block (Full-screen width bg) */}
+        <ProjectIntro />
 
-        {/* Talk Section with target button and orbiting particles */}
-        <TalkSection />
+        {/* Modular elements wrapper (centered layout) */}
+        <div className="w-full max-w-5xl mx-auto px-6 flex flex-col gap-20">
+          {/* Infinite scrolling showcase of Cozmo Agent capabilities */}
+          <FeatureMarquee />
+
+          {/* Talk Section with target button and orbiting particles */}
+          <TalkSection onStartChat={onStartChat} />
+        </div>
       </div>
     </div>
   );

@@ -1,13 +1,19 @@
 import React from 'react';
 import MokaLanding from './components/MokaLanding';
+import ChatInterface from './components/ChatInterface';
+import { useLocation } from './hooks/useLocation';
 
 /**
  * Main App component.
- * Renders the full-screen landing view for Moka Project.
+ * Manages routing dynamically based on URL pathnames.
  */
 export const App: React.FC = () => {
-  return (
-    <MokaLanding />
+  const [path, navigate] = useLocation();
+
+  return path === '/chat' || path === '/chat/' ? (
+    <ChatInterface onBackToLanding={() => navigate('/')} />
+  ) : (
+    <MokaLanding onStartChat={() => navigate('/chat')} />
   );
 };
 

@@ -38,10 +38,10 @@ export const VoiceWaveform: React.FC<VoiceWaveformProps> = ({ isHovered }) => {
     const resizeCanvas = () => {
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      
+
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
-      
+
       ctx.scale(dpr, dpr);
     };
 
@@ -57,8 +57,8 @@ export const VoiceWaveform: React.FC<VoiceWaveformProps> = ({ isHovered }) => {
       ctx.clearRect(0, 0, width, height);
 
       // Smoothly interpolate the activity/amplitude multiplier
-      // 1.0 when idle, 2.5 when hovered
-      const targetMultiplier = isHovered ? 2.5 : 1.0;
+      // 1.0 when idle, 1.5 when hovered
+      const targetMultiplier = isHovered ? 1.4 : 1.0;
       multiplierRef.current += (targetMultiplier - multiplierRef.current) * 0.06;
 
       ctx.lineCap = 'round';
@@ -86,7 +86,7 @@ export const VoiceWaveform: React.FC<VoiceWaveformProps> = ({ isHovered }) => {
         // Signature neon cyan color with varying opacity
         ctx.strokeStyle = `rgba(0, 243, 255, ${wave.opacity})`;
         ctx.lineWidth = wave.lineWidth;
-        
+
         // Add a subtle outer glow to the more visible waveforms
         if (wave.opacity > 0.4) {
           ctx.shadowBlur = 8;
