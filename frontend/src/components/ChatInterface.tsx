@@ -543,50 +543,58 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
         className="fixed inset-0 w-full h-full block pointer-events-none z-45"
       />
 
-      {/* Scrollable Conversation Stream State */}
+      {/* Scrollable Conversation Stream Wrapper (Full Width) */}
       <div
-        className={`flex-1 overflow-y-auto px-6 pt-24 pb-32 max-w-2xl mx-auto w-full transition-all duration-700 delay-200 flex flex-col gap-4 ${isConversationStarted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
-          }`}
+        className={`w-full flex-1 overflow-y-auto transition-all duration-700 delay-200 ${
+          isConversationStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
       >
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex flex-col max-w-[85%] ${msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'
-              }`}
-          >
-            {/* Sender tag */}
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1 px-1">
-              {msg.sender === 'user' ? 'You' : 'Moka'}
-            </span>
-            {/* Message bubble */}
+        {/* Centered Conversation Stream Content */}
+        <div
+          className={`px-6 pt-24 pb-32 max-w-2xl mx-auto w-full flex flex-col gap-4 transition-all duration-700 delay-200 ${
+            isConversationStarted ? 'translate-y-0' : 'translate-y-10'
+          }`}
+        >
+          {messages.map((msg) => (
             <div
-              className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed ${msg.sender === 'user'
-                  ? 'bg-slate-900/65 border border-cyan-500/20 text-white shadow-[0_0_15px_rgba(0,243,255,0.04)] rounded-tr-none'
-                  : 'bg-slate-950/70 border border-slate-800/70 text-slate-300 rounded-tl-none'
+              key={msg.id}
+              className={`flex flex-col max-w-[85%] ${msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'
                 }`}
             >
-              {msg.text}
+              {/* Sender tag */}
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1 px-1">
+                {msg.sender === 'user' ? 'You' : 'Moka'}
+              </span>
+              {/* Message bubble */}
+              <div
+                className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed ${msg.sender === 'user'
+                    ? 'bg-slate-900/65 border border-cyan-500/20 text-white shadow-[0_0_15px_rgba(0,243,255,0.04)] rounded-tr-none'
+                    : 'bg-slate-950/70 border border-slate-800/70 text-slate-300 rounded-tl-none'
+                  }`}
+              >
+                {msg.text}
+              </div>
+              {/* Timestamp */}
+              <span className="text-[9px] text-slate-600 mt-1 px-1">{msg.timestamp}</span>
             </div>
-            {/* Timestamp */}
-            <span className="text-[9px] text-slate-600 mt-1 px-1">{msg.timestamp}</span>
-          </div>
-        ))}
+          ))}
 
-        {/* Typing indicator bubble */}
-        {isMokaTyping && (
-          <div className="flex flex-col self-start items-start max-w-[85%]">
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1 px-1">
-              Moka
-            </span>
-            <div className="p-4 rounded-2xl rounded-tl-none bg-slate-950/70 border border-slate-800/70 flex gap-1.5 items-center justify-center min-w-[60px]">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          {/* Typing indicator bubble */}
+          {isMokaTyping && (
+            <div className="flex flex-col self-start items-start max-w-[85%]">
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1 px-1">
+                Moka
+              </span>
+              <div className="p-4 rounded-2xl rounded-tl-none bg-slate-950/70 border border-slate-800/70 flex gap-1.5 items-center justify-center min-w-[60px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Suggested Prompts Grid in Center (Fades out when conversation starts)

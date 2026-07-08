@@ -14,14 +14,28 @@ export const ProjectIntro: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto px-6 relative z-10 items-center">
         
         {/* Left Column: Core Copy & Definition */}
-        <div className="flex flex-col justify-center">
-          <div className="inline-block self-start text-[11px] font-extrabold text-[#00d2ff] uppercase tracking-[0.25em] mb-5 px-3 py-1 bg-cyan-950/40 rounded-full border border-cyan-500/25 shadow-[0_0_15px_rgba(0,210,255,0.08)]">
-            Technical Architecture
+        <div className="flex flex-col justify-center items-start">
+          <div className="relative inline-block mb-6">
+            <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-tight">
+              Technical Architecture
+            </h2>
+            <svg 
+              className="absolute -bottom-3 -left-2 w-[calc(100%+1rem)] h-3.5 text-[#00d2ff] drop-shadow-[0_0_8px_rgba(0,210,255,0.85)]" 
+              viewBox="0 0 300 20" 
+              fill="none" 
+              preserveAspectRatio="none" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path 
+                d="M 10 14 C 50 4, 100 18, 150 12 C 200 6, 250 16, 290 8" 
+                stroke="currentColor" 
+                strokeWidth="4" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+              />
+            </svg>
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-tight">
-            An Open, Context-Aware AI Bridge for Autonomous Companions.
-          </h2>
-          <p className="text-slate-400 text-lg leading-relaxed mt-6">
+          <p className="text-slate-400 text-lg leading-relaxed mt-2">
             Moka is a <span className="text-white font-medium">local, privacy-focused agentic system</span> running via <span className="text-white font-medium">Ollama</span>. It is powered by a sophisticated <span className="text-white font-medium">dual-layer memory architecture</span>, combining short-term checkpoint tracking with long-term RAG vector lookups.
           </p>
           <p className="text-slate-400 text-lg leading-relaxed mt-4">
