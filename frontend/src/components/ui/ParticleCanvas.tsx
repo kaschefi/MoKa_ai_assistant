@@ -11,10 +11,10 @@ const CONFIG = {
   STEP_Y: 8,  // Vertical scanline height (pixels)
 
   // --- Animation Transition Speeds ---
-  // Base easing speed. Increase to make transition faster (e.g. 0.08 to 0.12)
-  TRANSITION_SPEED: 0.02,
-  // Speed variation peparticle for an organic, asynchronous arrival (e.g. 0.04)
-  TRANSITION_VARIATION: 0.07,
+  // Base easing speed. Increase to make transition Snappy (e.g. 0.07)
+  TRANSITION_SPEED: 0.1,
+  // Speed variation per particle for an organic, asynchronous arrival (e.g. 0.05)
+  TRANSITION_VARIATION: 0.05,
 
   // --- Swarm/Drifting Wave Physics ---
   // Maximum strength of the curving swarm effect (0 for straight lines, 20-50 for curved paths)
@@ -370,9 +370,8 @@ export const ParticleCanvas: React.FC = () => {
           targetY = (scaledY + shiftY) * scale + offsetY + idleY;
           pTargetAlpha = 1.0;
         } else if (currentState === 'talk-button' && buttonRect) {
-          // Select button-active particles only from the active logo particles (to act as a unified unit)
-          const isButtonActive = p.mokaAlpha > 0.5 && (i % 5 !== 0);
-          
+          const isButtonActive = p.mokaAlpha > 0.5;
+
           if (isButtonActive) {
             const cx = buttonRect.left + buttonRect.width / 2;
             const cy = buttonRect.top + buttonRect.height / 2;
@@ -381,16 +380,16 @@ export const ParticleCanvas: React.FC = () => {
             const padding = 8 + p.speedOffset * 12; // thickness of the rectangular band
             const w = buttonRect.width + padding * 2;
             const h = buttonRect.height + padding * 2;
-            
+
             const left = cx - w / 2;
             const top = cy - h / 2;
-            
+
             const perimeter = 2 * (w + h);
-            
+
             // Compute t (0 to 1) based on seed and speed offset to distribute uniformly along the perimeter
             const t = ((p.seed % 1.0) + (time * 0.0006) * (0.8 + p.speedOffset * 0.4)) % 1.0;
             const dist = t * perimeter;
-            
+
             let destX = 0;
             let destY = 0;
             if (dist < w) {
