@@ -416,7 +416,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
   };
 
   // Submit handler
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text) return;
 
@@ -435,7 +435,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
     setMessages(prev => [...prev, userMessage]);
     if (!textToSend) setInputText('');
 
-    triggerMockMokaResponse(text);
+    setIsMokaTyping(true);
+
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: text,
+          session_id: 'web_session',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Math.random().toString(),
+          sender: 'moka',
+          text: data.response || 'No response text returned.',
+          timestamp: replyTimestamp
+        }
+      ]);
+      setIsMokaTyping(false);
+    } catch (error) {
+      console.warn("Backend API not reachable. Falling back to local mock response.", error);
+      triggerMockMokaResponse(text);
+    }
   };
 
   // Keypress listener for Enter and Spacebar voice trigger

@@ -61,3 +61,15 @@ class LiftRequest(BaseModel):
 
 class TimerRequest(BaseModel):
     seconds: int
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(
+        ...,
+        min_length=1,
+        description="The chat message input from the frontend user."
+    )
+    session_id: str = Field(
+        default="web_session",
+        description="Thread ID mapping for LangGraph memory states."
+    )
