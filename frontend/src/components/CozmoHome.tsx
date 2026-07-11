@@ -14,7 +14,7 @@ export const CozmoHome: React.FC = () => {
 
   return (
     <div 
-      className="relative w-screen h-screen bg-gradient-to-br from-[#020617] via-[#0a1128] to-[#020617] overflow-hidden flex flex-col justify-center items-center select-none"
+      className="relative w-screen h-screen bg-gradient-to-br from-[#020617] via-[#0a1128] to-[#020617] overflow-hidden flex flex-col justify-center items-center"
       data-testid="cozmo-home"
     >
       {/* 1. SCREEN CANVAS: Subtle digital matrix grid overlay (Cyan dots, 5% opacity) */}

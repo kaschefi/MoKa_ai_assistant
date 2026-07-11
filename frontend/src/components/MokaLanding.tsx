@@ -16,7 +16,7 @@ interface MokaLandingProps {
 
 export const MokaLanding: React.FC<MokaLandingProps> = ({ onStartChat }) => {
   return (
-    <div className="relative min-h-[220vh] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-x-hidden select-none">
+    <div className="relative min-h-[220vh] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-x-hidden">
       {/* Subtle digital grid overlay */}
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.03] z-10"

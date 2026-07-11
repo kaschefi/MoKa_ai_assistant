@@ -16,6 +16,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isMokaTyping, setIsMokaTyping] = useState(false);
+  const [pendingQueue, setPendingQueue] = useState<{ id: string; text: string; timestamp: string }[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -403,60 +404,45 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
     };
   }, []);
 
-  // Context-aware replies mock response logic
-  const triggerMockMokaResponse = (userMsg: string) => {
+  // Context-aware replies mock response logic returning a Promise
+  const triggerMockMokaResponse = (userMsg: string): Promise<void> => {
     setIsMokaTyping(true);
 
-    setTimeout(() => {
-      let reply = "I am checking my local systems for that task. What would you like to build?";
-      const cleaned = userMsg.toLowerCase();
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        let reply = "I am checking my local systems for that task. What would you like to build?";
+        const cleaned = userMsg.toLowerCase();
 
-      if (cleaned.includes('memory') || cleaned.includes('short-term') || cleaned.includes('long-term')) {
-        reply = "Moka uses a dual-layer memory system: PostgresSaver indexes recent message threads, while our local FastEmbed implementation manages long-term RAG lookups across files.";
-      } else if (cleaned.includes('cozmo') || cleaned.includes('robot') || cleaned.includes('control')) {
-        reply = "My low-latency physical bridge is active. I can steering-dock to the charger using cv2 HSV filters, query paths, or animate OLED face expressions.";
-      } else if (cleaned.includes('llm') || cleaned.includes('ollama') || cleaned.includes('model')) {
-        reply = "Moka is connected to your local Ollama engine. I am currently running Qwen 2.5 (7B) for deep cognition and Gemma 2 for lower latency routing checkpoints.";
-      } else if (cleaned.includes('hello') || cleaned.includes('hi') || cleaned.includes('hey')) {
-        reply = "Hello! I am Moka, your local autonomous AI companion. I'm connected to the local Ollama brain. How can I assist you with your workspace or Cozmo today?";
-      } else if (cleaned.includes('capabilities') || cleaned.includes('feature') || cleaned.includes('can you do')) {
-        reply = "I manage voice triggers ('hey buddy'), index FAISS vectors, trigger workstations, coordinate Google Calendar via n8n, and run OpenAPI auto-docking cycles.";
-      }
-
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Math.random().toString(),
-          sender: 'moka',
-          text: reply,
-          timestamp
+        if (cleaned.includes('memory') || cleaned.includes('short-term') || cleaned.includes('long-term')) {
+          reply = "Moka uses a dual-layer memory system: PostgresSaver indexes recent message threads, while our local FastEmbed implementation manages long-term RAG lookups across files.";
+        } else if (cleaned.includes('cozmo') || cleaned.includes('robot') || cleaned.includes('control')) {
+          reply = "My low-latency physical bridge is active. I can steering-dock to the charger using cv2 HSV filters, query paths, or animate OLED face expressions.";
+        } else if (cleaned.includes('llm') || cleaned.includes('ollama') || cleaned.includes('model')) {
+          reply = "Moka is connected to your local Ollama engine. I am currently running Qwen 2.5 (7B) for deep cognition and Gemma 2 for lower latency routing checkpoints.";
+        } else if (cleaned.includes('hello') || cleaned.includes('hi') || cleaned.includes('hey')) {
+          reply = "Hello! I am Moka, your local autonomous AI companion. I'm connected to the local Ollama brain. How can I assist you with your workspace or Cozmo today?";
+        } else if (cleaned.includes('capabilities') || cleaned.includes('feature') || cleaned.includes('can you do')) {
+          reply = "I manage voice triggers ('hey buddy'), index FAISS vectors, trigger workstations, coordinate Google Calendar via n8n, and run OpenAPI auto-docking cycles.";
         }
-      ]);
-      setIsMokaTyping(false);
-    }, 1500);
+
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setMessages(prev => [
+          ...prev,
+          {
+            id: Math.random().toString(),
+            sender: 'moka',
+            text: reply,
+            timestamp
+          }
+        ]);
+        setIsMokaTyping(false);
+        resolve();
+      }, 1500);
+    });
   };
 
-  // Submit handler
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || inputText).trim();
-    if (!text) return;
-
-    if (!isConversationStarted) {
-      setIsConversationStarted(true);
-    }
-
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userMessage: Message = {
-      id: Math.random().toString(),
-      sender: 'user',
-      text,
-      timestamp
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    if (!textToSend) setInputText('');
-
+  // Helper to process a message and contact the backend (with mock fallback)
+  const processMessage = async (text: string) => {
     setIsMokaTyping(true);
 
     try {
@@ -489,9 +475,65 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
       setIsMokaTyping(false);
     } catch (error) {
       console.warn("Backend API not reachable. Falling back to local mock response.", error);
-      triggerMockMokaResponse(text);
+      await triggerMockMokaResponse(text);
     }
   };
+
+  // Submit handler
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = (textToSend || inputText).trim();
+    if (!text) return;
+
+    if (!isConversationStarted) {
+      setIsConversationStarted(true);
+    }
+
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newMessage = {
+      id: Math.random().toString(),
+      text,
+      timestamp
+    };
+
+    if (!textToSend) setInputText('');
+
+    if (isMokaTyping || pendingQueue.length > 0) {
+      // Put message on hold in queue
+      setPendingQueue(prev => [...prev, newMessage]);
+    } else {
+      // Direct send
+      const userMessage: Message = {
+        id: newMessage.id,
+        sender: 'user',
+        text: newMessage.text,
+        timestamp: newMessage.timestamp
+      };
+      setMessages(prev => [...prev, userMessage]);
+      processMessage(newMessage.text);
+    }
+  };
+
+  // Delete pending/on-hold message from queue
+  const handleDeletePendingMessage = (id: string) => {
+    setPendingQueue(prev => prev.filter(m => m.id !== id));
+  };
+
+  // Queue loop: whenever agent is idle and queue has elements, process the next one
+  useEffect(() => {
+    if (!isMokaTyping && pendingQueue.length > 0) {
+      const nextMsg = pendingQueue[0];
+      setPendingQueue(prev => prev.slice(1));
+      
+      const userMessage: Message = {
+        id: nextMsg.id,
+        sender: 'user',
+        text: nextMsg.text,
+        timestamp: nextMsg.timestamp
+      };
+      setMessages(prev => [...prev, userMessage]);
+      processMessage(nextMsg.text);
+    }
+  }, [isMokaTyping, pendingQueue]);
 
   // Keypress listener for Enter and Spacebar voice trigger
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -501,7 +543,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
   };
 
   return (
-    <div className="relative w-screen h-screen bg-[#020512] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-hidden flex flex-col select-none">
+    <div className="relative w-screen h-screen bg-[#020512] bg-gradient-to-br from-[#020512] via-[#070b1a] to-[#020512] overflow-hidden flex flex-col">
       {/* Subtle digital grid overlay */}
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.03] z-10"
@@ -575,6 +617,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
                 {msg.text}
               </div>
               {/* Timestamp */}
+              <span className="text-[9px] text-slate-600 mt-1 px-1">{msg.timestamp}</span>
+            </div>
+          ))}
+
+          {/* Render pending/on-hold queued messages */}
+          {pendingQueue.map((msg) => (
+            <div
+              key={msg.id}
+              className="flex flex-col max-w-[85%] self-end items-end transition-all duration-300"
+            >
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1 px-1">
+                You
+              </span>
+              <div
+                className="p-4 rounded-2xl text-sm md:text-base leading-relaxed bg-[#0a0f24]/50 border border-dashed border-slate-700/60 text-slate-400 rounded-tr-none flex flex-col gap-2 min-w-[220px]"
+              >
+                <div>{msg.text}</div>
+                <div className="flex items-center justify-between gap-4 mt-1 pt-1.5 border-t border-slate-800/40">
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium font-sans">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    Queued (On Hold)
+                  </div>
+                  <button
+                    onClick={() => handleDeletePendingMessage(msg.id)}
+                    className="px-2 py-0.5 rounded border border-red-500/30 hover:border-red-400 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-white transition-all cursor-pointer text-xs flex items-center gap-1 font-semibold"
+                    title="Cancel and delete from queue"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Cancel
+                  </button>
+                </div>
+              </div>
               <span className="text-[9px] text-slate-600 mt-1 px-1">{msg.timestamp}</span>
             </div>
           ))}

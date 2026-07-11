@@ -6,7 +6,7 @@ interface AgentCoreStateProps {
 
 export const AgentCoreState: React.FC<AgentCoreStateProps> = ({ isHovered }) => {
   return (
-    <div className="relative w-full h-[220px] md:h-[260px] flex items-center justify-center rounded-2xl bg-slate-950/10 border border-slate-900/35 backdrop-blur-sm overflow-hidden select-none">
+    <div className="relative w-full h-[220px] md:h-[260px] flex items-center justify-center rounded-2xl bg-slate-950/10 border border-slate-900/35 backdrop-blur-sm overflow-hidden">
       
       {/* Local keyframe animations for the smooth organic soundwave ripples */}
       <style>{`

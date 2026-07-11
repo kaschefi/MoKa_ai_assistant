@@ -221,7 +221,7 @@ export const FeatureMarquee: React.FC = () => {
   );
 
   return (
-    <div className="w-full flex flex-col gap-12 select-none relative z-20">
+    <div className="w-full flex flex-col gap-12 relative z-20">
       {/* Centered Heading */}
       <div className="text-center max-w-2xl mx-auto px-4 mb-2 flex flex-col items-center">
         <div className="relative inline-block mb-6">

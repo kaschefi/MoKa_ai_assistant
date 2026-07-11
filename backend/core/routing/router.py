@@ -14,6 +14,7 @@ from psycopg.rows import dict_row
 from langgraph.checkpoint.postgres import PostgresSaver
 from langchain_core.messages import RemoveMessage
 from langsmith import traceable
+from actions.digital.calendar_agent import run_calendar_agent
 load_dotenv()
 
 
@@ -245,8 +246,8 @@ def route_query(state: AgentState):
 
 def calendar_node(state: AgentState):
     last_message = state["messages"][-1].content
-    n8n_reply = call_n8n_calendar(last_message)
-    return {"messages": [AIMessage(content=n8n_reply)]}
+    reply = run_calendar_agent(last_message)
+    return {"messages": [AIMessage(content=reply)]}
 
 
 def web_search_node(state: AgentState):
