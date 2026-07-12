@@ -367,7 +367,7 @@ speaker = VoiceSpeaker()
 # Legacy Adapters (Preserved to prevent breaking other modules)
 # -------------------------------------------------------------------------
 
-async def respond(text: str, play_animation: bool = True, language: str = "en"):
+async def respond(text: str, play_animation: bool = True, language: str = "en", mute: bool = False):
     """
     Unified system response coordinator (Updated to use local Kokoro TTS).
     Always prints to the terminal with beautiful styling.
@@ -376,7 +376,8 @@ async def respond(text: str, play_animation: bool = True, language: str = "en"):
     print(f"\n\033[94m{text}\033[0m\n")
 
     # Bypass language translation networks to stay offline, route immediately to local Kokoro.
-    await speaker.say(text, voice="am_echo")
+    if not mute:
+        await speaker.say(text, voice="am_echo")
 
     return {"status": "success", "message": "Response processed via local VoiceSpeaker."}
 

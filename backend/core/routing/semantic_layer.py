@@ -55,14 +55,14 @@ def initialize_router():
 initialize_router()
 
 
-async def execute_reflex(route_name: str) -> bool:
+async def execute_reflex(route_name: str, mute: bool = False) -> bool:
     if route_name in reflex_registry.actions:
         action_func, speech_text = reflex_registry.actions[route_name]
         print(f"Executing Reflex: {route_name}")
 
         if speech_text:
             from actions.physical.speak import respond
-            await respond(speech_text)
+            await respond(speech_text, mute=mute)
 
         if action_func:
             await action_func()

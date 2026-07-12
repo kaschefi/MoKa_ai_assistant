@@ -18,6 +18,37 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
   const [isMokaTyping, setIsMokaTyping] = useState(false);
   const [pendingQueue, setPendingQueue] = useState<{ id: string; text: string; timestamp: string }[]>([]);
 
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem('moka_chat_muted') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('moka_chat_muted', String(isMuted));
+  }, [isMuted]);
+
+  const handleToggleMute = async () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+
+    if (nextMuted) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['X-Moka-Token'] = token;
+        }
+
+        await fetch('http://127.0.0.1:5000/api/mute', {
+          method: 'POST',
+          headers,
+        });
+      } catch (err) {
+        console.warn("Failed to notify backend of mute interrupt:", err);
+      }
+    }
+  };
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const mouseRef = useRef({ x: 0, y: 0 });
@@ -53,6 +84,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
 
   // Core Brain Connection State (polls backend /api/health)
   const [isConnected, setIsConnected] = useState(false);
+  const [token, setToken] = useState<string>('');
+
+  useEffect(() => {
+    const fetchLocalToken = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/token/local');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            setToken(data.token);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to automatically retrieve local token:", err);
+      }
+    };
+    fetchLocalToken();
+  }, []);
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -446,14 +495,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
     setIsMokaTyping(true);
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['X-Moka-Token'] = token;
+      }
+
       const response = await fetch('http://127.0.0.1:5000/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           message: text,
           session_id: 'web_session',
+          mute: isMuted,
         }),
       });
 
@@ -576,6 +631,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
               }`} />
             Core Brain: {isConnected ? 'Connected' : 'Connecting...'}
           </div>
+          {token && (
+            <div className="text-[10px] md:text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-800/60 px-2 py-0.5 rounded font-mono" title={token}>
+              Token: {token.length > 8 ? `${token.substring(0, 4)}...${token.substring(token.length - 4)}` : token} (Local)
+            </div>
+          )}
         </div>
       </header>
 
@@ -704,6 +764,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
           }`}
       >
         <div className="w-full flex items-center bg-slate-950/70 border border-slate-800/80 rounded-2xl p-2.5 backdrop-blur-md hover:border-[#00d2ff]/30 focus-within:border-[#00d2ff]/50 focus-within:shadow-[0_0_20px_rgba(0,210,255,0.06)] transition-all">
+          <button
+            onClick={handleToggleMute}
+            className={`p-3 rounded-xl border transition-all duration-300 cursor-pointer flex items-center justify-center ${
+              isMuted
+                ? 'bg-rose-950/40 hover:bg-rose-900/60 border-rose-500/25 hover:border-rose-500/50 text-rose-400'
+                : 'bg-cyan-950/40 hover:bg-cyan-900/60 border-cyan-500/25 hover:border-cyan-500/50 text-cyan-400'
+            }`}
+            title={isMuted ? "Unmute speech output" : "Mute speech output"}
+          >
+            {isMuted ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6L4.5 9H1.5v6h3l4.5 3.75V5.25z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+              </svg>
+            )}
+          </button>
           <input
             type="text"
             value={inputText}

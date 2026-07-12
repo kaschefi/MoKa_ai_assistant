@@ -73,3 +73,7 @@ class ChatRequest(BaseModel):
         default="web_session",
         description="Thread ID mapping for LangGraph memory states."
     )
+    mute: bool = Field(
+        default=False,
+        description="If True, the agent will only output text response and not speak."
+    )
