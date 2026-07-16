@@ -6,7 +6,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import create_react_agent
 from core.routing.llm_factory import get_llm
 from core.routing.tool_vector_db import tool_rag_registry
-
+from core.routing.llm_factory import get_groq_model
 load_dotenv()
 
 qwen25 = get_llm("WEATHER_LLM_MODEL", "qwen2.5:3b", temperature=0)
@@ -48,8 +48,8 @@ def get_weather(city: str) -> str:
     import requests
     # Normalize city
     c = city.strip().lower()
-    
-    # 1. Try public wttr.in service first but with a generous 15-second timeout
+
+    # Try public wttr.in service first but with a 15-second timeout
     try:
         response = requests.get(f'https://wttr.in/{city}?format=3', timeout=15)
         response.raise_for_status()
@@ -90,7 +90,7 @@ def get_weather(city: str) -> str:
 
 
 weather_worker = create_react_agent(
-    model=qwen25,
+    model=get_groq_model(),
     tools=[get_weather],
     prompt=get_weather_prompt
 )

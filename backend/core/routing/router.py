@@ -23,7 +23,7 @@ RESET = "\033[0m"
 
 router_llm = get_llm("ROUTER_LLM_MODEL", "qwen2.5:3b", temperature=0)
 structured_router = router_llm.with_structured_output(RouteDecision)
-chat_llm = get_llm("CHAT_LLM_MODEL", "qwen2.5:3b", temperature=0.6)
+chat_llm = get_llm("CHAT_LLM_MODEL", "gemma4:e2b", temperature=0.6)
 
 
 # --- GRAPH NODES ---

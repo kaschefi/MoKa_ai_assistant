@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface Message {
   id: string;
@@ -84,6 +84,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
 
   // Core Brain Connection State (polls backend /api/health)
   const [isConnected, setIsConnected] = useState(false);
+  const isConnectedRef = useRef(false);
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
   const [token, setToken] = useState<string>('');
 
   useEffect(() => {
@@ -112,7 +116,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
         } else {
           setIsConnected(false);
         }
-      } catch (err) {
+      } catch {
         setIsConnected(false);
       }
     };
@@ -454,7 +458,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
   }, []);
 
   // Context-aware replies mock response logic returning a Promise
-  const triggerMockMokaResponse = (userMsg: string): Promise<void> => {
+  const triggerMockMokaResponse = useCallback((userMsg: string): Promise<void> => {
     setIsMokaTyping(true);
 
     return new Promise((resolve) => {
@@ -488,10 +492,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
         resolve();
       }, 1500);
     });
-  };
+  }, []);
 
-  // Helper to process a message and contact the backend (with mock fallback)
-  const processMessage = async (text: string) => {
+  const processMessage = useCallback(async (messageId: string, text: string, timestamp: string) => {
     setIsMokaTyping(true);
 
     try {
@@ -529,10 +532,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
       ]);
       setIsMokaTyping(false);
     } catch (error) {
-      console.warn("Backend API not reachable. Falling back to local mock response.", error);
-      await triggerMockMokaResponse(text);
+      console.warn("Backend API not reachable. Checking connection status...", error);
+      if (!isConnectedRef.current) {
+        // Roll back: remove user message from chat stream and prepend back to pending queue
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+        setPendingQueue(prev => [
+          { id: messageId, text, timestamp },
+          ...prev
+        ]);
+        setIsMokaTyping(false);
+      } else {
+        await triggerMockMokaResponse(text);
+      }
     }
-  };
+  }, [token, isMuted, triggerMockMokaResponse]);
 
   // Submit handler
   const handleSendMessage = async (textToSend?: string) => {
@@ -552,7 +565,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
 
     if (!textToSend) setInputText('');
 
-    if (isMokaTyping || pendingQueue.length > 0) {
+    if (isMokaTyping || pendingQueue.length > 0 || !isConnected) {
       // Put message on hold in queue
       setPendingQueue(prev => [...prev, newMessage]);
     } else {
@@ -564,7 +577,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
         timestamp: newMessage.timestamp
       };
       setMessages(prev => [...prev, userMessage]);
-      processMessage(newMessage.text);
+      processMessage(newMessage.id, newMessage.text, newMessage.timestamp);
     }
   };
 
@@ -573,12 +586,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
     setPendingQueue(prev => prev.filter(m => m.id !== id));
   };
 
-  // Queue loop: whenever agent is idle and queue has elements, process the next one
+  // Queue loop: whenever agent is idle, connection is there, and queue has elements, process the next one
   useEffect(() => {
-    if (!isMokaTyping && pendingQueue.length > 0) {
+    if (isConnected && !isMokaTyping && pendingQueue.length > 0) {
       const nextMsg = pendingQueue[0];
       setPendingQueue(prev => prev.slice(1));
-      
+
       const userMessage: Message = {
         id: nextMsg.id,
         sender: 'user',
@@ -586,9 +599,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
         timestamp: nextMsg.timestamp
       };
       setMessages(prev => [...prev, userMessage]);
-      processMessage(nextMsg.text);
+      processMessage(nextMsg.id, nextMsg.text, nextMsg.timestamp);
     }
-  }, [isMokaTyping, pendingQueue]);
+  }, [isConnected, isMokaTyping, pendingQueue, processMessage]);
 
   // Keypress listener for Enter and Spacebar voice trigger
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -626,8 +639,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
           </button>
           <div className="flex items-center gap-2 text-xs md:text-sm text-slate-400 font-medium tracking-wide">
             <span className={`w-2 h-2 rounded-full animate-pulse ${isConnected
-                ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]'
-                : 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
+              ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]'
+              : 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
               }`} />
             Core Brain: {isConnected ? 'Connected' : 'Connecting...'}
           </div>
@@ -647,15 +660,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
 
       {/* Scrollable Conversation Stream Wrapper (Full Width) */}
       <div
-        className={`w-full flex-1 overflow-y-auto transition-all duration-700 delay-200 ${
-          isConversationStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`w-full flex-1 overflow-y-auto transition-all duration-700 delay-200 ${isConversationStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
       >
         {/* Centered Conversation Stream Content */}
         <div
-          className={`px-6 pt-24 pb-32 max-w-2xl mx-auto w-full flex flex-col gap-4 transition-all duration-700 delay-200 ${
-            isConversationStarted ? 'translate-y-0' : 'translate-y-10'
-          }`}
+          className={`px-6 pt-24 pb-32 max-w-2xl mx-auto w-full flex flex-col gap-4 transition-all duration-700 delay-200 ${isConversationStarted ? 'translate-y-0' : 'translate-y-10'
+            }`}
         >
           {messages.map((msg) => (
             <div
@@ -670,8 +681,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
               {/* Message bubble */}
               <div
                 className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed ${msg.sender === 'user'
-                    ? 'bg-slate-900/65 border border-cyan-500/20 text-white shadow-[0_0_15px_rgba(0,243,255,0.04)] rounded-tr-none'
-                    : 'bg-slate-950/70 border border-slate-800/70 text-slate-300 rounded-tl-none'
+                  ? 'bg-slate-900/65 border border-cyan-500/20 text-white shadow-[0_0_15px_rgba(0,243,255,0.04)] rounded-tr-none'
+                  : 'bg-slate-950/70 border border-slate-800/70 text-slate-300 rounded-tl-none'
                   }`}
               >
                 {msg.text}
@@ -695,8 +706,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
               >
                 <div>{msg.text}</div>
                 <div className="flex items-center justify-between gap-4 mt-1 pt-1.5 border-t border-slate-800/40">
-                  <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium font-sans">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium font-sans">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
                     Queued (On Hold)
                   </div>
                   <button
@@ -759,18 +770,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onBackToLanding })
       {/* Sliding Input Box Container */}
       <div
         className={`absolute left-1/2 -translate-x-1/2 w-full px-6 transition-all duration-700 ease-in-out z-20 ${isConversationStarted
-            ? 'bottom-6 max-w-2xl'
-            : 'bottom-10 max-w-lg'
+          ? 'bottom-6 max-w-2xl'
+          : 'bottom-10 max-w-lg'
           }`}
       >
         <div className="w-full flex items-center bg-slate-950/70 border border-slate-800/80 rounded-2xl p-2.5 backdrop-blur-md hover:border-[#00d2ff]/30 focus-within:border-[#00d2ff]/50 focus-within:shadow-[0_0_20px_rgba(0,210,255,0.06)] transition-all">
           <button
             onClick={handleToggleMute}
-            className={`p-3 rounded-xl border transition-all duration-300 cursor-pointer flex items-center justify-center ${
-              isMuted
+            className={`p-3 rounded-xl border transition-all duration-300 cursor-pointer flex items-center justify-center ${isMuted
                 ? 'bg-rose-950/40 hover:bg-rose-900/60 border-rose-500/25 hover:border-rose-500/50 text-rose-400'
                 : 'bg-cyan-950/40 hover:bg-cyan-900/60 border-cyan-500/25 hover:border-cyan-500/50 text-cyan-400'
-            }`}
+              }`}
             title={isMuted ? "Unmute speech output" : "Mute speech output"}
           >
             {isMuted ? (
