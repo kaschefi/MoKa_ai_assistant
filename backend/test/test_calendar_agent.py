@@ -8,8 +8,8 @@ from langgraph.prebuilt import ToolNode
 from langsmith import Client
 from langsmith.evaluation import evaluate
 from core.routing.llm_factory import get_llm
-
-# Import the base configuration/nodes from your production code
+from .llm_as_judge import exact_match_evaluator
+# Import the base configuration/nodes from production code
 from actions.digital.calendar_agent import AgentState, call_agent, router_edge
 
 
@@ -99,8 +99,7 @@ def ensure_dataset_exists():
 def target_agent_runner(inputs: dict) -> dict:
     """Wrapper that executes a specific test run scenario."""
     test_graph = get_test_calendar_graph()
-    current_time = "2026-07-11T13:34:00"  # Fixed point-in-time reference for temporal tests
-
+    current_time = "2026-07-11T13:34:00"
     graph_inputs = {
         "messages": [
             HumanMessage(content=f"[Context: Current Time is {current_time}]\n\nUser request: {inputs['message']}")
@@ -112,88 +111,7 @@ def target_agent_runner(inputs: dict) -> dict:
 
 
 
-def exact_match_evaluator(run, example) -> dict:
-    prediction = run.outputs.get("output", "")
-    reference = example.outputs.get("expected", "")
 
-    if reference.lower() in prediction.lower():
-        return {"key": "rule_adherence", "score": 1.0}
-
-    # Connect directly to your local Ollama instance
-    judge_llm = get_llm("JUDGE_LLM_MODEL", "llama3.1", temperature=0)
-
-    prompt = prompt = f"""
-You are an impartial evaluator for a Google Calendar assistant.
-
-Your job is ONLY to evaluate whether the assistant's final response satisfies the expected outcome.
-
-Expected Outcome:
-{reference}
-
-Assistant Response:
-{prediction}
-
-Evaluation Rules:
-
-1. Compare the RESPONSE to the EXPECTED OUTCOME.
-2. Ignore differences in wording, grammar, punctuation and capitalization.
-3. Accept paraphrases if they communicate the same meaning.
-4. Do NOT reward extra politeness or conversational filler.
-5. Penalize missing information, incorrect information, or contradictory information.
-6. If the response claims an action different from the expected outcome, score very low.
-7. If the expected outcome says the assistant should refuse or ask for clarification, then confirming an action is incorrect.
-8. If the assistant invents facts not present in the expected outcome, deduct points.
-9. Focus ONLY on whether the user's intent was correctly fulfilled.
-
-Scoring Rubric:
-
-100
-- Meaning is identical to the expected outcome.
-- No important information is missing.
-- No incorrect information.
-
-90
-- Same meaning with only insignificant wording differences.
-
-75
-- Mostly correct but missing one important detail.
-
-50
-- Partially correct.
-- Some important information is incorrect or missing.
-
-25
-- Mostly incorrect.
-- Wrong action or misleading response.
-
-0
-- Completely incorrect.
-- Hallucinated.
-- Contradicts the expected outcome.
-
-Output Requirements:
-
-Return ONLY one integer.
-Do NOT explain.
-Do NOT output markdown.
-Do NOT output any text besides the number.
-
-Score:
-"""
-
-    try:
-        judge_response = judge_llm.invoke(prompt).content.strip()
-        # Clean out any accidental text characters to extract only the digits
-        numeric_score = int(''.join(filter(str.isdigit, judge_response)))
-        scaled_score = numeric_score / 100.0
-    except Exception as e:
-        print(f"Ollama Judge Parsing Error: {e}")
-        scaled_score = 0.0
-
-    return {"key": "rule_adherence", "score": scaled_score}
-
-
-# Inside tests/test_calendar_agent.py
 
 if __name__ == "__main__":
     print("Synching dataset targets with LangSmith...")
@@ -201,22 +119,14 @@ if __name__ == "__main__":
 
     print("Launching targeted trace matrix execution...")
 
-    # 1. Initialize the LangSmith client
+    # Initialize the LangSmith client
     client = Client()
 
-    # 2. Fetch all raw examples from your dataset
+    #  Fetch all raw examples from your dataset
     all_examples = list(client.list_examples(dataset_name=DATASET_NAME))
 
-    # 3. Filter down to only the example containing "dentist"
-    filtered_examples = [
-        ex for ex in all_examples
-        if "dentist" in ex.inputs.get("message", "").lower()
-    ]
-
-    # 4. Pass the isolated list of examples straight to evaluate()
     evaluate(
         target_agent_runner,
-        data=filtered_examples,  # Pass the filtered list directly here
+        data=all_examples,
         evaluators=[exact_match_evaluator],
-        experiment_prefix="calendar-dentist-debug"
     )

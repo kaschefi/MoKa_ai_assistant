@@ -4,7 +4,7 @@ import os
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_ollama import ChatOllama
-
+from core.routing.llm_factory import get_llm
 
 # 1. Define the Sandbox directly as a LangChain Tool using the @tool decorator
 @tool
