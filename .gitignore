@@ -221,3 +221,8 @@ temp_speech.wav
 
 # JetBrains Evaluation
 .jbeval/
+
+# Windows Specific Files
+moka_web_launch.bat
+.bat
+convert_icon.py

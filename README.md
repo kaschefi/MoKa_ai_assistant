@@ -1,4 +1,4 @@
-# Cozmo AI Assistant
+# MoKa AI Assistant
 
 An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a state-of-the-art two-layer intelligence pipeline: **Layer 1** fast semantic reflexes (50ms latency) for instant physical and laptop commands, and **Layer 2** a dynamic **LangGraph-powered AI brain** that uses local LLMs (`qwen2.5:3b` via Ollama) and a **Vector RAG Tool Retrieval Index** for complex natural conversation, Google Calendar management, and advanced search agents (Weather, Tavily MCP, Web Search). All features are exposed via an interactive console launcher, voice control, or a **FastAPI** REST bridge.
 
@@ -23,6 +23,7 @@ An AI-powered assistant built around the **Anki Cozmo** robot. The system uses a
 | **FastAPI REST Bridge** | Exposes all physical actions (docking, speak, timer, face expressions) as HTTP endpoints for external triggers |
 | **Short-Term Memory** | PostgreSQL-backed persistent session state tracker (`PostgresSaver`) paired with rolling context summarization and automatic history trimming to keep context windows tiny |
 | **Long-Term Memory** | Permanent biographical store using native PostgreSQL float arrays (`REAL[]`), local `FastEmbed` embeddings, NumPy cosine similarity, dynamic entity resolution categories ($O(1)$ updates), and async background extraction threads |
+| **Code Executor Agent** | Deterministic local code execution sub-agent that spawns an isolated Python sandbox to run calculations, algorithms, data filtering, and text parsing with absolute accuracy (using `ornith:9b` via local Ollama) |
 
 ---
 
@@ -109,49 +110,55 @@ cozmo_ai_assistant/
 ├── roadmap.md                  # Project milestones and task backlog
 ├── README.md                   # Full system documentation
 │
-├── core/
-│   ├── __init__.py
-│   │
-│   ├── hardware/               # Physical hardware connections and robot managers
-│   │   ├── __init__.py
-│   │   └── connection.py       # Singleton Cozmo hardware connection manager
-│   │
-│   ├── routing/                # AI Intelligence, Layer 1 & 2 routers, reflex registries, and tool RAG
-│   │   ├── __init__.py
-│   │   ├── registry.py         # Decorator class for low-latency Layer 1 reflex registration
-│   │   ├── router.py           # LangGraph state machine flow, supervisor, and node workers
-│   │   ├── semantic_layer.py   # Layer 1 semantic matching router & package-wide action loader
-│   │   └── tool_vector_db.py   # FAISS vector store bridge for dynamic tool registration & retrieval
-│   │
-│   └── modes/                  # Interface modes and runtime application shells
-│       ├── __init__.py
-│       ├── cozmo_mode.py       # FastAPI application server and REST endpoint routing
-│       └── terminal_mode.py    # Terminal REPL chat client with n8n/Ollama auto-initialization
-│
-├── actions/
-│   ├── physical/               # Robot hardware controls
-│   │   ├── __init__.py
-│   │   ├── charger.py          # Vision-guided docking using OpenCV HSV color filtering (Yellow-Green, RGB 204, 255, 51)
-│   │   ├── face.py             # OLED canvas draw actions (Timer MM:SS, weather details, thinking indicator)
-│   │   ├── listen.py           # Speech recognition wake-word parser ("hey buddy") (implementation inspired by OpenJarvis)
-│   │   ├── speak.py            # Kokoro-ONNX zero-disk I/O local TTS engine (implementation inspired by OpenJarvis)
-│   │   └── timer.py            # Asynchronous countdown clock controller
-│   │
-│   └── digital/                # Digital APIs & Agent integrations
-│       ├── __init__.py
-│       ├── langchain_agents.py # Weather ReAct agent utilizing wttr.in tool & prompt engineering
-│       ├── MCPs.py             # Tavily search powered by standard Model Context Protocol client via npx
-│       ├── n8n_agents.py       # n8n webhook connectors for Google Calendar and web searching
-│       ├── setups.py           # OS-level workstation launchers (Gaming, Study, Coding routines)
-│       └── system_tools.py     # System action registry (Date and Time responses)
-│
-├── schemas/
-│   ├── __init__.py
-│   └── request_models.py       # Pydantic models for REST API requests and LangGraph TypedDict state
-│
-└── utils/
-    ├── __init__.py
-    └── logger.py               # Centralized logging configurations
+└── backend/                    # Core Python backend package
+    ├── core/
+    │   ├── __init__.py
+    │   │
+    │   ├── hardware/               # Physical hardware connections and robot managers
+    │   │   ├── __init__.py
+    │   │   └── connection.py       # Singleton Cozmo hardware connection manager
+    │   │
+    │   ├── routing/                # AI Intelligence, Layer 1 & 2 routers, reflex registries, and tool RAG
+    │   │   ├── __init__.py
+    │   │   ├── registry.py         # Decorator class for low-latency Layer 1 reflex registration
+    │   │   ├── router.py           # LangGraph state machine flow, supervisor, and node workers
+    │   │   ├── semantic_layer.py   # Layer 1 semantic matching router & package-wide action loader
+    │   │   └── tool_vector_db.py   # FAISS vector store bridge for dynamic tool registration & retrieval
+    │   │
+    │   └── modes/                  # Interface modes and runtime application shells
+    │       ├── __init__.py
+    │       ├── cozmo_mode.py       # FastAPI application server and REST endpoint routing
+    │       └── terminal_mode.py    # Terminal REPL chat client with n8n/Ollama auto-initialization
+    │
+    ├── actions/
+    │   ├── physical/               # Robot hardware controls
+    │   │   ├── __init__.py
+    │   │   ├── charger.py          # Vision-guided docking using OpenCV HSV color filtering (Yellow-Green, RGB 204, 255, 51)
+    │   │   ├── face.py             # OLED canvas draw actions (Timer MM:SS, weather details, thinking indicator)
+    │   │   ├── listen.py           # Speech recognition wake-word parser ("hey buddy") (implementation inspired by OpenJarvis)
+    │   │   ├── speak.py            # Kokoro-ONNX zero-disk I/O local TTS engine (implementation inspired by OpenJarvis)
+    │   │   └── timer.py            # Asynchronous countdown clock controller
+    │   │
+    │   └── digital/                # Digital APIs & Agent integrations
+    │       ├── __init__.py
+    │       ├── code_executor.py    # Local Python code sandbox execution sub-agent using ornith:9b
+    │       ├── langchain_agents.py # Weather ReAct agent utilizing wttr.in tool & prompt engineering
+    │       ├── MCPs.py             # Tavily search powered by standard Model Context Protocol client via npx
+    │       ├── n8n_agents.py       # n8n webhook connectors for Google Calendar and web searching
+    │       ├── setups.py           # OS-level workstation launchers (Gaming, Study, Coding routines)
+    │       └── system_tools.py     # System action registry (Date and Time responses)
+    │
+    ├── schemas/
+    │   ├── __init__.py
+    │   └── request_models.py       # Pydantic models for REST API requests and LangGraph TypedDict state
+    │
+    ├── test/                       # Verification test suites
+    │   ├── test_code_executor.py   # LangSmith verification suite for code execution logic
+    │   └── llm_as_judge.py         # Evaluator criteria matching logic
+    │
+    └── utils/
+        ├── __init__.py
+        └── logger.py               # Centralized logging configurations
 ```
 
 ---
@@ -197,6 +204,7 @@ TAVILY_API_KEY=your_tavily_api_key_here
 Pull the required Ollama models:
 ```bash
 ollama pull qwen2.5:3b
+ollama pull ornith:9b
 ```
 
 ### 3. Launch the Assistant
@@ -248,6 +256,20 @@ This spawns the standard Tavily MCP package, executes a query, and handles commu
 Workstation presets are tied to local shell utilities:
 *   **Gaming**: Executes custom URI protocols (`steam://`) and queries paths to boot update launchers before executing Discord update commands.
 *   **Coding & Study**: Performs multi-tab browser dispatch routines (`webbrowser.open`) and searches registry folders dynamically using glob matching to execute JetBrains IDEs.
+
+### 4. Deterministic Code Execution Sub-Agent
+For complex calculations, mathematical formulas, date-time manipulations, or string formatting where reasoning accuracy is paramount, the system routes queries to a dedicated code execution sub-agent powered by the `ornith:9b` model (via local Ollama). It drafts a Python solution, runs it inside an isolated subprocess sandbox using `execute_python_sandbox`, and translates the output back to the user:
+```python
+# backend/actions/digital/code_executor.py
+@tool
+def execute_python_sandbox(code_string: str) -> str:
+    """
+    Executes a raw Python code string inside an isolated local subprocess
+    and captures stdout print statements or stderr exceptions.
+    """
+    # Writes, executes, and cleans up the temporary python execution file
+    ...
+```
 
 ---
 
