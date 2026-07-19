@@ -70,34 +70,69 @@ def format_iso_datetime(dt_str: str) -> str:
     raise ValueError(f"Invalid date/time format: '{dt_str}'. Must be an ISO 8601 string (e.g. YYYY-MM-DDTHH:MM:SSZ).")
 
 
+TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "google_token.json")
+
 def get_calendar_service():
-    """Builds the calendar client using server-side environment variables directly, with automatic refresh handling."""
-    token = os.getenv("GOOGLE_ACCESS_TOKEN")
-    refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    """Builds the calendar client using server-side credentials with local file persistence and automatic refresh handling."""
+    creds = None
 
-    if not all([token, refresh_token, client_id, client_secret]):
-        raise ValueError("Missing one or more Google OAuth environment variables (GOOGLE_ACCESS_TOKEN, GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET).")
+    # 1. Try loading from the persisted token file
+    if os.path.exists(TOKEN_FILE):
+        try:
+            creds = Credentials.from_authorized_user_file(TOKEN_FILE)
+            # If the user changed credentials in the environment variables, discard the cache
+            env_client_id = os.getenv("GOOGLE_CLIENT_ID")
+            env_refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
+            if (env_client_id and creds.client_id != env_client_id) or \
+               (env_refresh_token and creds.refresh_token != env_refresh_token):
+                creds = None
+        except Exception:
+            creds = None
 
-    creds = Credentials(
-        token=token,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=client_id,
-        client_secret=client_secret
-    )
+    # 2. If no credentials loaded (or cache was discarded), load from environment variables
+    if not creds:
+        token = os.getenv("GOOGLE_ACCESS_TOKEN")
+        refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
 
+        if not all([token, refresh_token, client_id, client_secret]):
+            raise ValueError("Missing one or more Google OAuth environment variables (GOOGLE_ACCESS_TOKEN, GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET).")
+
+        creds = Credentials(
+            token=token,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret
+        )
+
+    # 3. If credentials are not valid (e.g. expired access token), refresh them
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
+                # Save the updated credentials to the token file
+                with open(TOKEN_FILE, 'w') as token_f:
+                    token_f.write(creds.to_json())
             except RefreshError as re:
-                raise ValueError(f"Google OAuth refresh token has expired or is invalid: {re}")
+                raise ValueError(
+                    f"Google OAuth refresh token has expired or is invalid: {re}. "
+                    "If this happens often, please ensure your Google Cloud Project's OAuth Consent Screen "
+                    "publishing status is set to 'In Production' so that tokens do not expire after 7 days."
+                )
             except Exception as e:
                 raise ValueError(f"Failed to refresh Google OAuth token: {e}")
         else:
             raise ValueError("Google OAuth credentials are invalid and cannot be refreshed.")
+    else:
+        # If valid but file doesn't exist yet, save it
+        if not os.path.exists(TOKEN_FILE):
+            try:
+                with open(TOKEN_FILE, 'w') as token_f:
+                    token_f.write(creds.to_json())
+            except Exception:
+                pass
 
     return build('calendar', 'v3', credentials=creds)
 
