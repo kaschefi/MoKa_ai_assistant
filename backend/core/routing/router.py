@@ -388,12 +388,24 @@ def chat_node(state: AgentState):
     response = chat_llm.invoke(messages_payload)
     return {"messages": [response]}
 
+TOOL_REGISTRY = {
+    "calendar_node": calendar_node,
+    "web_search_node": web_search_node,
+    "weather_node": weather_node,
+}
+
+def execute_tool_node(state: AgentState):
+    route = state.get("next_route", "none")
+    handler = TOOL_REGISTRY.get(route)
+    if handler:
+        return handler(state)
+    return {"messages": [AIMessage(content=f"Error: Tool handler for '{route}' not found.")]}
+
 def decide_next_step(state: AgentState) -> str:
     """Evaluates router output and targets a node execution branch."""
     route = state.get("next_route", "none")
-    # If the LLM returned an active valid tool node, go there. Otherwise fallback to chat.
-    if route in ["calendar_node", "web_search_node", "weather_node"]:
-        return route
+    if route in TOOL_REGISTRY:
+        return "execute_tool_node"
     return "chat_node"
 
 
@@ -404,9 +416,7 @@ builder = StateGraph(AgentState)
 builder.add_node("tool_retrieval_node", tool_retrieval_node)
 builder.add_node("route_query", route_query)
 builder.add_node("summarize_conversation_node", summarize_conversation_node)
-builder.add_node("calendar_node", calendar_node)
-builder.add_node("web_search_node", web_search_node)
-builder.add_node("weather_node", weather_node)
+builder.add_node("execute_tool_node", execute_tool_node)
 builder.add_node("chat_node", chat_node)
 builder.add_node("memory_retrieval_node", memory_retrieval_node)
 builder.add_node("memory_extraction_node", memory_extraction_node)
@@ -417,9 +427,7 @@ builder.add_edge("memory_retrieval_node", "tool_retrieval_node")
 builder.add_edge("tool_retrieval_node", "route_query")
 builder.add_conditional_edges("route_query", decide_next_step)
 
-builder.add_edge("calendar_node", "summarize_conversation_node")
-builder.add_edge("web_search_node", "summarize_conversation_node")
-builder.add_edge("weather_node", "summarize_conversation_node")
+builder.add_edge("execute_tool_node", "summarize_conversation_node")
 builder.add_edge("chat_node", "summarize_conversation_node")
 
 builder.add_edge("summarize_conversation_node", "memory_extraction_node")
